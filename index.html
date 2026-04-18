@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Asistencia TTFG</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="icon" href="favicon.png" type="image/png">
+    <style>
+        body { font-family: 'Courier New', Courier, monospace; background: #fff; display: flex; justify-content: center; padding: 20px; }
+        .config-panel { border: 2px solid #000; padding: 30px; width: 400px; background: #fff; }
+        h1 { font-size: 1.1rem; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 8px; margin: 0 0 20px 0; }
+        .group { margin-bottom: 15px; }
+        label { display: block; font-size: 9px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+        input { width: 100%; padding: 10px; border: 1px solid #000; box-sizing: border-box; font-family: inherit; font-size: 14px; }
+        button { width: 100%; padding: 15px; background: #000; color: #fff; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; margin-top: 10px; }
+        button:hover { background: #333; }
+        #qr-hidden, #temp-canvas { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="config-panel">
+        <h1>Generador de QR - Asistencia TTFG</h1>
+        <div class="group">
+            <label>Link del Formulario</label>
+            <input type="text" id="urlInput" value="https://forms.gle/brSJRWUR3K5Khzvs5">
+        </div>
+        <div class="group">
+            <label>Horario</label>
+            <input type="text" id="scheduleInput" value="9:30 a 10:30">
+        </div>
+        <div class="group">
+            <label>Fecha de Sesión</label>
+            <input type="date" id="dateInput">
+        </div>
+        <button id="genBtn" onclick="generatePDF()">Generar PDF</button>
+    </div>
+
+    <div id="qr-hidden"></div>
+    <canvas id="temp-canvas"></canvas>
+
+    <script>
+        // Traducción
+        async function translateTitle(text) {
+            try {
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`);
+                const data = await res.json();
+                return data.responseData.translatedText;
+            } catch (e) { return text; }
+        }
+
+        // --- APIS DE ARTE ---
+
+        // Fuente 1: Chicago Art Institute
+        async function fetchAIC() {
+            const seed = Math.floor(Math.random() * 800);
+            const r = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=painting&query[term][is_public_domain]=true&limit=1&page=${seed}&fields=title,artist_title,date_display,image_id`);
+            const data = await r.json();
+            const art = data.data[0];
+            return {
+                title: art.title,
+                artist: art.artist_title || "Desconocido",
+                date: art.date_display || "s/f",
+                img: `https://www.artic.edu/iiif/2/${art.image_id}/full/1000,/0/default.jpg`,
+                ref: `AIC_${art.image_id.substring(0,6)}`
+            };
+        }
+
+        // Fuente 2: The Metropolitan Museum of Art (The Met)
+        async function fetchTheMet() {
+            // Buscamos pinturas destacadas en dominio público
+            const rSearch = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?isHighlight=true&q=painting&hasImages=true`);
+            const dataSearch = await rSearch.json();
+            const randomId = dataSearch.objectIDs[Math.floor(Math.random() * dataSearch.objectIDs.length)];
+            
+            const rObj = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${randomId}`);
+            const art = await rObj.json();
+            return {
+                title: art.title,
+                artist: art.artistDisplayName || "Desconocido",
+                date: art.objectDate || "s/f",
+                img: art.primaryImageSmall || art.primaryImage,
+                ref: `MET_${art.objectID}`
+            };
+        }
+
+        // Selector Aleatorio
+        async function getArtData() {
+            return (Math.random() > 0.5) ? await fetchAIC() : await fetchTheMet();
+        }
+
+        function processImg(url) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = () => {
+                    const canvas = document.getElementById('temp-canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 1000;
+                    canvas.height = (img.height / img.width) * 1000;
+                    ctx.filter = 'grayscale(100%) contrast(1.2) brightness(1.05)';
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve({ data: canvas.toDataURL('image/jpeg', 0.8), ratio: img.height / img.width });
+                };
+                img.onerror = () => resolve(null);
+                img.src = url;
+            });
+        }
+
+        async function generatePDF() {
+            const btn = document.getElementById('genBtn');
+            btn.innerText = "ACCEDIENDO A ARCHIVOS...";
+            btn.disabled = true;
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+
+            const url = document.getElementById('urlInput').value;
+            const schedule = document.getElementById('scheduleInput').value;
+            const dateVal = document.getElementById('dateInput').value;
+            const d = dateVal ? new Date(dateVal + "T12:00:00") : new Date();
+            const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
+            // PDF HEADER
+            doc.setFont("courier", "bold");
+            doc.setFontSize(18);
+            doc.text(`ASISTENCIA TALLER TFG - ${dateStr}`, 15, 20);
+            doc.setLineWidth(0.5);
+            doc.line(15, 22, 195, 22);
+            doc.setFont("courier", "normal");
+            doc.setFontSize(9);
+            doc.text(`FORMULARIO DISPONIBLE DE ${schedule.toUpperCase()}`, 15, 27);
+
+            // QR
+            const qrDiv = document.getElementById('qr-hidden');
+            qrDiv.innerHTML = "";
+            new QRCode(qrDiv, { text: url, width: 400, height: 400, colorDark: "#000" });
+            await new Promise(r => setTimeout(r, 300));
+            const qrImg = qrDiv.querySelector('canvas').toDataURL("image/png");
+            doc.addImage(qrImg, 'PNG', 70, 35, 70, 70);
+
+            doc.setFontSize(8);
+            doc.text(url, 105, 110, { align: 'center' });
+            doc.setFontSize(6);
+            doc.text(`GENERADO EL ${new Date().toLocaleString('es-AR')}`, 105, 114, { align: 'center' });
+            doc.setLineWidth(0.1);
+            doc.line(40, 122, 170, 122);
+
+            // ARTE Y TRADUCCIÓN
+            const artData = await getArtData();
+            if (artData && artData.img) {
+                btn.innerText = "TRADUCIENDO TÍTULO...";
+                const translatedTitle = await translateTitle(artData.title);
+                btn.innerText = "PROCESANDO IMAGEN...";
+                const processed = await processImg(artData.img);
+                
+                if (processed) {
+                    const maxH = 115; 
+                    const maxW = 180;
+                    let imgH = maxH;
+                    let imgW = imgH / processed.ratio;
+                    if (imgW > maxW) { imgW = maxW; imgH = imgW * processed.ratio; }
+
+                    const startY = 130;
+                    doc.addImage(processed.data, 'JPEG', (210 - imgW) / 2, startY, imgW, imgH);
+
+                    // Cédula Centrada
+                    let metaY = startY + imgH + 10;
+                    doc.setFont("courier", "bold");
+                    doc.setFontSize(10);
+                    const titleLines = doc.splitTextToSize(translatedTitle.toUpperCase(), 160);
+                    doc.text(titleLines, 105, metaY, { align: 'center' });
+                    
+                    metaY += (titleLines.length * 4.5) + 4; 
+                    doc.setFont("courier", "normal");
+                    doc.setFontSize(8);
+                    const metaInfo = `ARTISTA: ${artData.artist.toUpperCase()} | FECHA: ${artData.date} | REF: ${artData.ref}`;
+                    doc.text(metaInfo, 105, metaY, { align: 'center' });
+                }
+            }
+
+            doc.setLineWidth(0.5);
+            doc.line(95, 285, 115, 285);
+            doc.save(`ASISTENCIA_V9_${dateStr.replace(/\//g, '-')}.pdf`);
+            btn.innerText = "Generar PDF (Multi-Museum)";
+            btn.disabled = false;
+        }
+    </script>
+</body>
+</html>
