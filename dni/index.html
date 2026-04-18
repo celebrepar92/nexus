@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validador de DNIs - Taller de TFG</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,wght@0,300;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f0e8;
+    --surface: #fffdf7;
+    --ink: #1a1714;
+    --ink-muted: #6b6460;
+    --accent: #c8622a;
+    --accent-light: #f0e4d8;
+    --success: #3a7d5a;
+    --success-light: #d8ede4;
+    --error: #b33a3a;
+    --error-light: #f0d8d8;
+    --warn: #8a6a1a;
+    --warn-light: #f0e8cc;
+    --border: #ddd8ce;
+  }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 3rem 1.5rem 4rem;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 3rem;
+    animation: fadeDown 0.6s ease both;
+  }
+
+  header h1 {
+    font-family: 'Fraunces', serif;
+    font-weight: 300;
+    font-size: clamp(1.8rem, 5vw, 2.8rem);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+
+  header h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  header p {
+    margin-top: 0.6rem;
+    font-size: 0.72rem;
+    color: var(--ink-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 2rem;
+    width: 100%;
+    max-width: 560px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    animation: fadeUp 0.5s ease both 0.15s;
+  }
+
+  .section-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.6rem;
+  }
+
+  /* CSV Upload */
+  .upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 2px;
+    padding: 1.4rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    margin-bottom: 1.6rem;
+  }
+
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: var(--accent-light); }
+  .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  .upload-zone .icon {
+    font-size: 1.6rem;
+    margin-bottom: 0.4rem;
+    display: block;
+  }
+
+  .upload-zone p { font-size: 0.75rem; color: var(--ink-muted); }
+  .upload-zone p strong { color: var(--ink); }
+
+  .csv-status {
+    font-size: 0.72rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: 2px;
+    margin-bottom: 1.6rem;
+    display: none;
+  }
+
+  .csv-status.ok { background: var(--success-light); color: var(--success); display: block; }
+  .csv-status.err { background: var(--error-light); color: var(--error); display: block; }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 1.6rem 0;
+  }
+
+  /* DNI input */
+  .input-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: stretch;
+  }
+
+  .dni-wrap {
+    flex: 1;
+    position: relative;
+  }
+
+  .dni-wrap input {
+    width: 100%;
+    font-family: 'DM Mono', monospace;
+    font-size: 1.1rem;
+    letter-spacing: 0.12em;
+    padding: 0.75rem 1rem;
+    border: 1.5px solid var(--border);
+    border-radius: 2px;
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .dni-wrap input:focus { border-color: var(--accent); }
+  .dni-wrap input.invalid { border-color: var(--error); }
+
+  .dni-hint {
+    font-size: 0.65rem;
+    color: var(--error);
+    margin-top: 0.35rem;
+    min-height: 1em;
+    display: block;
+  }
+
+  button.search-btn {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 2px;
+    padding: 0 1.2rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+    align-self: flex-start;
+    height: 46px;
+  }
+
+  button.search-btn:hover { background: #a84e20; }
+  button.search-btn:active { transform: scale(0.97); }
+  button.search-btn:disabled { background: var(--border); color: var(--ink-muted); cursor: default; }
+
+  /* Results */
+  .results {
+    margin-top: 1.6rem;
+    animation: fadeUp 0.3s ease both;
+  }
+
+  .result-item {
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.6rem;
+    transition: border-color 0.2s;
+  }
+
+  .result-item:hover { border-color: var(--accent); }
+
+  .result-item .result-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .result-item .dni-display {
+    font-size: 1rem;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+  }
+
+  .result-item .dni-display span {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  /* Nombre destacado */
+  .result-item .person-name {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--ink);
+    margin-top: 0.3rem;
+    letter-spacing: 0.01em;
+  }
+
+  .result-item .meta {
+    font-size: 0.68rem;
+    color: var(--ink-muted);
+    text-align: right;
+    line-height: 1.5;
+    flex-shrink: 0;
+  }
+
+
+  .badge {
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.45rem;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .badge.present { background: var(--warn-light); color: var(--warn); }
+  .badge.absent { background: var(--success-light); color: var(--success); }
+
+  .no-results {
+    text-align: center;
+    padding: 1.5rem;
+    font-size: 0.75rem;
+    color: var(--ink-muted);
+  }
+
+  .exact-match {
+    border-color: var(--success);
+    background: var(--success-light);
+  }
+
+  .exact-match .badge.absent { background: var(--success); color: #fff; }
+
+  /* Config panel */
+  .config-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .config-field {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .config-field label {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    margin-bottom: 0.35rem;
+  }
+
+  .config-field input, .config-field select {
+    width: 100%;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--bg);
+    color: var(--ink);
+    outline: none;
+  }
+
+  details summary {
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    cursor: pointer;
+    margin-bottom: 1rem;
+    user-select: none;
+  }
+
+  details summary:hover { color: var(--accent); }
+
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Taller TFG<br><em>Verificador de asistencia</em></h1>
+  <p>Búsqueda por DNI aproximado</p>
+</header>
+
+<div class="card">
+
+  <!-- CSV config -->
+  <details id="config-panel">
+    <summary>⚙ Configuración de columnas</summary>
+    <div class="config-row">
+      <div class="config-field">
+        <label>Columna DNI (nombre)</label>
+        <input type="text" id="col-dni" value="DNI" placeholder="DNI">
+      </div>
+      <div class="config-field">
+        <label>Columna nombre</label>
+        <input type="text" id="col-name" value="Nombre completo" placeholder="Nombre completo">
+      </div>
+      <div class="config-field">
+        <label>Columna presencia</label>
+        <input type="text" id="col-present" value="Presente" placeholder="Presente">
+      </div>
+      <div class="config-field">
+        <label>Valor = presente</label>
+        <input type="text" id="val-present" value="1" placeholder="1 / SI / true">
+      </div>
+    </div>
+  </details>
+
+  <!-- Upload -->
+  <p class="section-label">1 — Cargar padrón CSV</p>
+  <div class="upload-zone" id="drop-zone">
+    <input type="file" accept=".csv" id="csv-input">
+    <span class="icon">📋</span>
+    <p><strong>Arrastrá el CSV acá</strong> o hacé clic para elegirlo</p>
+  </div>
+  <div class="csv-status" id="csv-status"></div>
+
+  <hr class="divider">
+
+  <!-- Search -->
+  <p class="section-label">2 — Ingresar DNI a buscar</p>
+  <div class="input-row">
+    <div class="dni-wrap">
+      <input type="text" id="dni-input" placeholder="12345678" maxlength="11" inputmode="numeric" autocomplete="off">
+      <span class="dni-hint" id="dni-hint"></span>
+    </div>
+    <button class="search-btn" id="search-btn" disabled>Buscar</button>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results"></div>
+
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────
+  let records   = [];
+
+  // ── Helpers ────────────────────────────────────────────
+  function colDni()     { return document.getElementById('col-dni').value.trim() || 'DNI'; }
+  function colName()    { return document.getElementById('col-name').value.trim() || 'Nombre'; }
+  function colPresent() { return document.getElementById('col-present').value.trim() || 'Presente'; }
+  function valPresent() { return document.getElementById('val-present').value.trim() || '1'; }
+
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) return null;
+
+    // Detect separator
+    const sep = lines[0].includes(';') ? ';' : ',';
+
+    const headers = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g, ''));
+    const rows = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(sep).map(v => v.trim().replace(/^"|"$/g, ''));
+      if (vals.every(v => v === '')) continue;
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = vals[idx] || ''; });
+      rows.push(obj);
+    }
+    return { headers, rows };
+  }
+
+  function buildRecords(headers, rows) {
+    const dniCol     = colDni();
+    const nameCol    = colName();
+    const presentCol = colPresent();
+    const presentVal = valPresent().toLowerCase();
+
+    return rows.map(r => ({
+      dni:     (r[dniCol] || '').replace(/\D/g, ''),
+      name:    r[nameCol] || '—',
+      present: (r[presentCol] || '').toLowerCase() === presentVal,
+      raw:     r
+    })).filter(r => r.dni.length >= 6);
+  }
+
+  // ── Levenshtein distance ───────────────────────────────
+  function levenshtein(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({length: m+1}, (_, i) => Array.from({length: n+1}, (_, j) => i === 0 ? j : j === 0 ? i : 0));
+    for (let i = 1; i <= m; i++)
+      for (let j = 1; j <= n; j++)
+        dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    return dp[m][n];
+  }
+
+  // Highlight differing digits
+  function highlightDiff(query, target) {
+    const maxLen = Math.max(query.length, target.length);
+    let html = '';
+    for (let i = 0; i < maxLen; i++) {
+      const q = query[i] || '';
+      const t = target[i] || '';
+      html += q !== t ? `<span>${t}</span>` : t;
+    }
+    return html;
+  }
+
+  // ── DNI validation ─────────────────────────────────────
+  const dniInput  = document.getElementById('dni-input');
+  const dniHint   = document.getElementById('dni-hint');
+  const searchBtn = document.getElementById('search-btn');
+
+  function validateDni(val) {
+    const clean = val.replace(/\D/g, '');
+    if (val !== clean) return 'Solo se permiten números.';
+    if (clean.length > 0 && clean.length < 7) return 'El DNI tiene al menos 7 dígitos.';
+    if (clean.length > 9) return 'El DNI tiene como máximo 9 dígitos.';
+    return null;
+  }
+
+  dniInput.addEventListener('input', () => {
+    const raw = dniInput.value;
+    const clean = raw.replace(/\D/g, '');
+    if (raw !== clean) dniInput.value = clean;
+
+    const err = validateDni(clean);
+    dniHint.textContent = err || '';
+    dniInput.classList.toggle('invalid', !!err);
+
+    const ready = !err && clean.length >= 7 && records.length > 0;
+    searchBtn.disabled = !ready;
+
+    if (clean.length === 0) {
+      dniHint.textContent = '';
+      document.getElementById('results').innerHTML = '';
+    }
+  });
+
+  dniInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !searchBtn.disabled) doSearch();
+  });
+
+  // ── CSV loading ────────────────────────────────────────
+  const csvInput  = document.getElementById('csv-input');
+  const dropZone  = document.getElementById('drop-zone');
+  const csvStatus = document.getElementById('csv-status');
+
+  function loadCSVText(text, filename) {
+    const parsed = parseCSV(text);
+    if (!parsed) {
+      csvStatus.className = 'csv-status err';
+      csvStatus.textContent = 'No se pudo leer el archivo. Verificá que sea un CSV válido.';
+      return;
+    }
+
+    records = buildRecords(parsed.headers, parsed.rows);
+
+    if (records.length === 0) {
+      csvStatus.className = 'csv-status err';
+      csvStatus.textContent = `No se encontró la columna "${colDni()}" o no hay filas con DNI válido.`;
+      return;
+    }
+
+    csvStatus.className = 'csv-status ok';
+    csvStatus.textContent = `✓ ${filename} — ${records.length} estudiantes cargados. Con presencia: ${records.filter(r=>r.present).length}.`;
+
+    const clean = dniInput.value.replace(/\D/g, '');
+    const err = validateDni(clean);
+    searchBtn.disabled = !(!err && clean.length >= 7);
+  }
+
+  csvInput.addEventListener('change', () => {
+    const file = csvInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => loadCSVText(e.target.result, file.name);
+    reader.readAsText(file, 'UTF-8');
+  });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = ev => loadCSVText(ev.target.result, file.name);
+      reader.readAsText(file, 'UTF-8');
+    }
+  });
+
+  // ── Search ─────────────────────────────────────────────
+  searchBtn.addEventListener('click', doSearch);
+
+  function doSearch() {
+    const query = dniInput.value.replace(/\D/g, '');
+    if (!query || records.length === 0) return;
+
+    const scored = records.map(r => {
+      const dist = levenshtein(query, r.dni);
+      return { ...r, dist };
+    });
+
+    scored.sort((a, b) => a.dist - b.dist);
+    const top = scored.slice(0, 5);
+
+    renderResults(query, top);
+  }
+
+  function renderResults(query, items) {
+    const el = document.getElementById('results');
+
+    if (items.length === 0 || items[0].dist > 4) {
+      el.innerHTML = `<div class="no-results">No se encontraron DNIs similares en el padrón.</div>`;
+      return;
+    }
+
+    el.innerHTML = items.map((r) => {
+      const isExact   = r.dist === 0;
+      const dniHtml   = isExact ? r.dni : highlightDiff(query, r.dni);
+      const badgeClass = r.present ? 'present' : 'absent';
+      const badgeText  = r.present ? 'Ya presente' : 'Sin marcar';
+      const distLabel  = isExact ? 'Coincidencia exacta' : `${r.dist} dígito${r.dist !== 1 ? 's' : ''} de diferencia`;
+
+      // Nombre
+      const nameHtml = (r.name && r.name !== '—')
+        ? `<div class="person-name">${r.name}</div>`
+        : '';
+
+      return `
+        <div class="result-item ${isExact ? 'exact-match' : ''}">
+          <div class="result-top">
+            <div>
+              <div class="dni-display">${dniHtml}</div>
+              ${nameHtml}
+            </div>
+            <div class="meta">
+              <span class="badge ${badgeClass}">${badgeText}</span><br>
+              <span style="margin-top:0.3rem;display:inline-block">${distLabel}</span>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+</script>
+</body>
+</html>
