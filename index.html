@@ -120,14 +120,14 @@
             <h2>Generador de PDF</h2>
             
             <div class="group">
-                <label>Formulario / Comisión</label>
+                <label>Comisión</label>
                 <select id="urlInput">
                     <option value="https://forms.gle/brSJRWUR3K5Khzvs5">INVESTIGACIÓN (RF-INV)</option>
                     <option value="https://forms.gle/5TKAKNPiqyU6ab8N8">INTERVENCIÓN (RF-INT)</option>
                 </select>
             </div>
 
-           <div class="group" style="flex: 1;">
+           <div class="group">
                 <label>Fecha</label>
                 <input type="date" id="dateInput">
             </div>
@@ -196,10 +196,10 @@
     function updateButtonUI(isTestMode) {
         // FALSE = Cerrada (Verde para activar) | TRUE = Abierta (Rojo para desactivar)
         if (isTestMode) {
-            statusBtn.innerText = "Desactivar asistencia (Abierta)";
+            statusBtn.innerText = "Desactivar asistencia";
             statusBtn.style.backgroundColor = "var(--danger)";
         } else {
-            statusBtn.innerText = "Activar asistencia (Cerrada)";
+            statusBtn.innerText = "Activar asistencia";
             statusBtn.style.backgroundColor = "var(--success)";
         }
     }
