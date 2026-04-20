@@ -216,21 +216,29 @@
     async function fetchTheMet() { const rSearch = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?isHighlight=true&q=painting&hasImages=true`); const dataSearch = await rSearch.json(); const randomId = dataSearch.objectIDs[Math.floor(Math.random() * dataSearch.objectIDs.length)]; const rObj = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${randomId}`); const art = await rObj.json(); return { title: art.title, artist: art.artistDisplayName || "Desconocido", date: art.objectDate || "s/f", img: art.primaryImageSmall || art.primaryImage, ref: `MET_${art.objectID}` }; }
     
     function processImg(url) { 
-        return new Promise((resolve) => { 
-            const img = new Image(); 
-            img.crossOrigin = "Anonymous"; 
-            img.onload = () => { 
+    return new Promise((resolve) => { 
+        const img = new Image(); 
+        // Solo poner crossOrigin para URLs externas
+        if (url.startsWith('http')) img.crossOrigin = "Anonymous"; 
+        img.onload = () => { 
+            try {
                 const canvas = document.getElementById('temp-canvas'); 
                 const ctx = canvas.getContext('2d'); 
-                canvas.width = 1000; canvas.height = (img.height / img.width) * 1000; 
-                ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); 
+                canvas.width = 1000; 
+                canvas.height = (img.height / img.width) * 1000; 
+                ctx.fillStyle = "#ffffff"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height); 
                 ctx.filter = 'grayscale(100%) contrast(1.2) brightness(1.05)'; 
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height); 
                 resolve({ data: canvas.toDataURL('image/jpeg', 0.8), ratio: img.height / img.width }); 
-            }; 
-            img.onerror = () => resolve(null); 
-            img.src = url; 
-        }); 
+            } catch(e) {
+                console.error("Canvas error:", e);
+                resolve(null);
+            }
+        }; 
+        img.onerror = (e) => { console.error("Image load error:", e); resolve(null); }
+        img.src = url; 
+    }); 
     }
 
     function getFileData(file) { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve(e.target.result); reader.readAsDataURL(file); }); }
@@ -264,10 +272,15 @@
             // QR Robusto (Detecta canvas o img)
             const qrDiv = document.getElementById('qr-hidden'); qrDiv.innerHTML = "";
             new QRCode(qrDiv, { text: url, width: 400, height: 400, colorDark: "#000" });
-            await new Promise(r => setTimeout(r, 600)); // Más tiempo para renderizar
-            
+
+            await new Promise(r => setTimeout(r, 1000)); // más tiempo
+
             const qrElement = qrDiv.querySelector('canvas') || qrDiv.querySelector('img');
-            const qrData = qrElement.tagName === 'CANVAS' ? qrElement.toDataURL("image/png") : qrElement.src;
+            if (!qrElement) throw new Error("QR no renderizó");
+            const qrData = qrElement.tagName === 'CANVAS' 
+                ? qrElement.toDataURL("image/png") 
+                : qrElement.src;
+            if (!qrData || qrData === 'data:,') throw new Error("QR vacío");
             doc.addImage(qrData, 'PNG', 70, 35, 70, 70);
 
             // Arte
