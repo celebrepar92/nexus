@@ -160,179 +160,154 @@
     </div>
 
     <script>
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyCz0xuSeFIHzZSUrKketDJPbPGUF4BGs2bVbCU2LcqgHFyQW-udbmE_l-UGLAHjfE7hQ/exec";
-        const statusBtn = document.getElementById('testModeBtn');
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyCz0xuSeFIHzZSUrKketDJPbPGUF4BGs2bVbCU2LcqgHFyQW-udbmE_l-UGLAHjfE7hQ/exec";
+    const statusBtn = document.getElementById('testModeBtn');
 
-        // Lógica de Autenticación
-        netlifyIdentity.on('init', user => {
-            if (!user) {
-                document.getElementById("adminPanel").style.display = "none";
-                netlifyIdentity.open();
-            } else {
-                activarPanel();
-            }
-        });
-        netlifyIdentity.on('login', () => { netlifyIdentity.close(); activarPanel(); });
-        netlifyIdentity.on('logout', () => location.reload());
+    // --- AUTENTICACIÓN ---
+    netlifyIdentity.on('init', user => {
+        if (!user) {
+            document.getElementById("adminPanel").style.display = "none";
+            netlifyIdentity.open();
+        } else { activarPanel(); }
+    });
+    netlifyIdentity.on('login', () => { netlifyIdentity.close(); activarPanel(); });
+    netlifyIdentity.on('logout', () => location.reload());
 
-        function activarPanel() {
-            document.getElementById("adminPanel").style.display = "block";
-            checkStatus();
-        }
-
-        // Lógica de Botón de Asistencia (Swap de Lógica solicitado)
-        async function checkStatus() {
-            try {
-                const response = await fetch(WEB_APP_URL, { mode: 'cors' });
-                const data = await response.json();
-                updateButtonUI(data.testMode);
-            } catch (err) {
-                statusBtn.innerText = "Error de conexión";
-            }
-        }
-
-        async function toggleMode() {
-            if (statusBtn.disabled) return;
-            statusBtn.disabled = true;
-            statusBtn.innerText = "Procesando...";
-            try {
-                const response = await fetch(`${WEB_APP_URL}?action=toggle`, { mode: 'cors' });
-                const data = await response.json();
-                updateButtonUI(data.testMode);
-            } catch (err) {
-                alert("Error al cambiar estado");
-            } finally {
-                statusBtn.disabled = false;
-            }
-        }
-
-        function updateButtonUI(isTestMode) {
-            // FALSE = CERRADA (Botón Verde para activar)
-            // TRUE = ABIERTA (Botón Rojo para desactivar)
-            if (isTestMode) {
-                statusBtn.innerText = "Desactivar asistencia (Abierta)";
-                statusBtn.style.backgroundColor = "var(--danger)";
-            } else {
-                statusBtn.innerText = "Activar asistencia (Cerrada)";
-                statusBtn.style.backgroundColor = "var(--success)";
-            }
-        }
-
-        /* LÓGICA DE PDF (Se mantiene íntegra del archivo original) */
-        async function translateTitle(text) { try { const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`); const data = await res.json(); return data.responseData.translatedText; } catch (e) { return text; } }
-        async function fetchAIC() { const seed = Math.floor(Math.random() * 800); const r = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=painting&query[term][is_public_domain]=true&limit=1&page=${seed}&fields=title,artist_title,date_display,image_id`); const data = await r.json(); const art = data.data[0]; return { title: art.title, artist: art.artist_title || "Desconocido", date: art.date_display || "s/f", img: `https://www.artic.edu/iiif/2/${art.image_id}/full/1000,/0/default.jpg`, ref: `AIC_${art.image_id.substring(0,6)}` }; }
-        async function fetchTheMet() { const rSearch = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?isHighlight=true&q=painting&hasImages=true`); const dataSearch = await rSearch.json(); const randomId = dataSearch.objectIDs[Math.floor(Math.random() * dataSearch.objectIDs.length)]; const rObj = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${randomId}`); const art = await rObj.json(); return { title: art.title, artist: art.artistDisplayName || "Desconocido", date: art.objectDate || "s/f", img: art.primaryImageSmall || art.primaryImage, ref: `MET_${art.objectID}` }; }
-        function processImg(url) { return new Promise((resolve) => { const img = new Image(); img.crossOrigin = "Anonymous"; img.onload = () => { const canvas = document.getElementById('temp-canvas'); const ctx = canvas.getContext('2d'); canvas.width = 1000; canvas.height = (img.height / img.width) * 1000; ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.filter = 'grayscale(100%) contrast(1.2) brightness(1.05)'; ctx.drawImage(img, 0, 0, canvas.width, canvas.height); resolve({ data: canvas.toDataURL('image/jpeg', 0.8), ratio: img.height / img.width }); }; img.onerror = () => resolve(null); img.src = url; }); }
-        function getFileData(file) { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve(e.target.result); reader.readAsDataURL(file); }); }
-
-        async function generatePDF() {
-    const btn = document.getElementById('genBtn');
-    const urlInput = document.getElementById('urlInput');
-    // Obtenemos el nombre de la comisión seleccionada (ej: "RF-INV")
-    const comisionNombre = urlInput.options[urlInput.selectedIndex].text;
-    
-    btn.innerText = "PROCESANDO..."; 
-    btn.disabled = true;
-
-    try {
-        const { jsPDF } = window.jspdf; 
-        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-        
-        const url = urlInput.value;
-        const schedule = document.getElementById('scheduleInput').value;
-        const dateVal = document.getElementById('dateInput').value;
-        const d = dateVal ? new Date(dateVal + "T12:00:00") : new Date();
-        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-
-        // --- ENCABEZADO ---
-        doc.setFont("courier", "bold"); 
-        doc.setFontSize(18);
-        doc.text(`ASISTENCIA TALLER TFG`, 15, 18);
-        
-        doc.setFontSize(11);
-        doc.text(`${comisionNombre} | ${dateStr}`, 15, 25);
-        
-        // Icono de seguridad (Identicon)
-        const identicon = await processImg(`https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(url)}&backgroundColor=ffffff`);
-        if (identicon) doc.addImage(identicon.data, 'JPEG', 183, 8, 12, 12);
-        
-        doc.setLineWidth(0.5); 
-        doc.line(15, 28, 195, 28);
-
-        // --- GENERACIÓN DE QR ---
-        const qrDiv = document.getElementById('qr-hidden'); 
-        qrDiv.innerHTML = "";
-        new QRCode(qrDiv, { text: url, width: 400, height: 400, colorDark: "#000" });
-        
-        // Espera un poco más para asegurar el renderizado en móviles
-        await new Promise(r => setTimeout(r, 500));
-        
-        const qrCanvas = qrDiv.querySelector('canvas');
-        const qrImg = qrCanvas ? qrCanvas.toDataURL("image/png") : qrDiv.querySelector('img').src;
-        
-        doc.addImage(qrImg, 'PNG', 70, 35, 70, 70);
-
-        // Pie del QR
-        doc.setFont("courier", "normal");
-        doc.setFontSize(8);
-        doc.text(url, 105, 110, { align: 'center' });
-        doc.setFontSize(6);
-        doc.text(`HORARIO: ${schedule} | GENERADO EL ${new Date().toLocaleString('es-AR')}`, 105, 114, { align: 'center' });
-
-        doc.setLineWidth(0.1);
-        doc.line(40, 122, 170, 122);
-
-        // --- PROCESAMIENTO DE ARTE ---
-        let artData = null; 
-        let finalImgSource = null;
-        const fileInput = document.getElementById('fileInput');
-        const customUrl = document.getElementById('customImgUrl').value;
-
-        if (fileInput.files[0]) {
-            finalImgSource = await getFileData(fileInput.files[0]);
-            artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f", ref: "LOCAL" };
-        } else if (customUrl) {
-            finalImgSource = customUrl;
-            artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f", ref: "URL" };
-        } else {
-            // Si no hay manual, busca en museos
-            artData = (Math.random() > 0.5) ? await fetchAIC() : await fetchTheMet();
-            artData.title = await translateTitle(artData.title);
-            finalImgSource = artData.img;
-        }
-
-        if (finalImgSource) {
-            const processed = await processImg(finalImgSource);
-            if (processed) {
-                const maxH = 115; const maxW = 180;
-                let imgH = maxH; let imgW = imgH / processed.ratio;
-                if (imgW > maxW) { imgW = maxW; imgH = imgW * processed.ratio; }
-                
-                doc.addImage(processed.data, 'JPEG', (210 - imgW) / 2, 130, imgW, imgH);
-                
-                doc.setFont("courier", "bold");
-                doc.setFontSize(10); 
-                const titleLines = doc.splitTextToSize(artData.title.toUpperCase(), 160);
-                doc.text(titleLines, 105, 130 + imgH + 10, { align: 'center' });
-                
-                doc.setFont("courier", "normal");
-                doc.setFontSize(8);
-                doc.text(`${artData.artist.toUpperCase()} (${artData.date})`, 105, 130 + imgH + 18, { align: 'center' });
-            }
-        }
-
-        // Guardar con nombre de comisión
-        const nombreArchivo = `ASISTENCIA_${comisionNombre.split(' ')[0]}_${dateStr.replace(/\//g, '-')}.pdf`;
-        doc.save(nombreArchivo);
-
-    } catch (err) {
-        console.error("Error en PDF:", err);
-        alert("No se pudo generar el PDF. Verifica la conexión o la imagen seleccionada.");
-    } finally {
-        btn.innerText = "Descargar PDF"; 
-        btn.disabled = false;
+    function activarPanel() {
+        document.getElementById("adminPanel").style.display = "block";
+        checkStatus();
     }
-}
-    </script>
+
+    // --- ESTADO DE ASISTENCIA ---
+    async function checkStatus() {
+        try {
+            const response = await fetch(WEB_APP_URL, { mode: 'cors' });
+            const data = await response.json();
+            updateButtonUI(data.testMode);
+        } catch (err) { statusBtn.innerText = "Error de conexión"; }
+    }
+
+    async function toggleMode() {
+        if (statusBtn.disabled) return;
+        statusBtn.disabled = true;
+        statusBtn.innerText = "Procesando...";
+        try {
+            const response = await fetch(`${WEB_APP_URL}?action=toggle`, { mode: 'cors' });
+            const data = await response.json();
+            updateButtonUI(data.testMode);
+        } catch (err) { alert("Error al cambiar estado"); } 
+        finally { statusBtn.disabled = false; }
+    }
+
+    function updateButtonUI(isTestMode) {
+        // FALSE = Cerrada (Verde para activar) | TRUE = Abierta (Rojo para desactivar)
+        if (isTestMode) {
+            statusBtn.innerText = "Desactivar asistencia (Abierta)";
+            statusBtn.style.backgroundColor = "var(--danger)";
+        } else {
+            statusBtn.innerText = "Activar asistencia (Cerrada)";
+            statusBtn.style.backgroundColor = "var(--success)";
+        }
+    }
+
+    // --- GENERACIÓN DE PDF ---
+    async function translateTitle(text) { try { const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`); const data = await res.json(); return data.responseData.translatedText; } catch (e) { return text; } }
+    async function fetchAIC() { const seed = Math.floor(Math.random() * 800); const r = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=painting&query[term][is_public_domain]=true&limit=1&page=${seed}&fields=title,artist_title,date_display,image_id`); const data = await r.json(); const art = data.data[0]; return { title: art.title, artist: art.artist_title || "Desconocido", date: art.date_display || "s/f", img: `https://www.artic.edu/iiif/2/${art.image_id}/full/1000,/0/default.jpg`, ref: `AIC_${art.image_id.substring(0,6)}` }; }
+    async function fetchTheMet() { const rSearch = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?isHighlight=true&q=painting&hasImages=true`); const dataSearch = await rSearch.json(); const randomId = dataSearch.objectIDs[Math.floor(Math.random() * dataSearch.objectIDs.length)]; const rObj = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${randomId}`); const art = await rObj.json(); return { title: art.title, artist: art.artistDisplayName || "Desconocido", date: art.objectDate || "s/f", img: art.primaryImageSmall || art.primaryImage, ref: `MET_${art.objectID}` }; }
+    
+    function processImg(url) { 
+        return new Promise((resolve) => { 
+            const img = new Image(); 
+            img.crossOrigin = "Anonymous"; 
+            img.onload = () => { 
+                const canvas = document.getElementById('temp-canvas'); 
+                const ctx = canvas.getContext('2d'); 
+                canvas.width = 1000; canvas.height = (img.height / img.width) * 1000; 
+                ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); 
+                ctx.filter = 'grayscale(100%) contrast(1.2) brightness(1.05)'; 
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height); 
+                resolve({ data: canvas.toDataURL('image/jpeg', 0.8), ratio: img.height / img.width }); 
+            }; 
+            img.onerror = () => resolve(null); 
+            img.src = url; 
+        }); 
+    }
+
+    function getFileData(file) { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve(e.target.result); reader.readAsDataURL(file); }); }
+
+    async function generatePDF() {
+        const btn = document.getElementById('genBtn');
+        const urlInput = document.getElementById('urlInput');
+        const comisionText = urlInput.options[urlInput.selectedIndex].text; // Obtiene el nombre (ej: RF-INV)
+        
+        btn.innerText = "PROCESANDO..."; btn.disabled = true;
+
+        try {
+            const { jsPDF } = window.jspdf; 
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+            
+            const url = urlInput.value;
+            const dateVal = document.getElementById('dateInput').value;
+            const d = dateVal ? new Date(dateVal + "T12:00:00") : new Date();
+            const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+
+            // Cabecera con Comisión
+            doc.setFont("courier", "bold"); doc.setFontSize(18);
+            doc.text(`ASISTENCIA TALLER TFG`, 15, 20);
+            doc.setFontSize(10);
+            doc.text(`${comisionText} - ${dateStr}`, 15, 26);
+            
+            const identicon = await processImg(`https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(url)}&backgroundColor=ffffff`);
+            if (identicon) doc.addImage(identicon.data, 'JPEG', 183, 8, 12, 12);
+            doc.setLineWidth(0.5); doc.line(15, 28, 195, 28);
+
+            // QR Robusto (Detecta canvas o img)
+            const qrDiv = document.getElementById('qr-hidden'); qrDiv.innerHTML = "";
+            new QRCode(qrDiv, { text: url, width: 400, height: 400, colorDark: "#000" });
+            await new Promise(r => setTimeout(r, 600)); // Más tiempo para renderizar
+            
+            const qrElement = qrDiv.querySelector('canvas') || qrDiv.querySelector('img');
+            const qrData = qrElement.tagName === 'CANVAS' ? qrElement.toDataURL("image/png") : qrElement.src;
+            doc.addImage(qrData, 'PNG', 70, 35, 70, 70);
+
+            // Arte
+            let artData = null; let finalImgSource = null;
+            const fileInput = document.getElementById('fileInput');
+            const customUrl = document.getElementById('customImgUrl').value;
+
+            if (fileInput.files[0]) {
+                finalImgSource = await getFileData(fileInput.files[0]);
+                artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f", ref: "LOCAL" };
+            } else if (customUrl) {
+                finalImgSource = customUrl;
+                artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f", ref: "URL" };
+            } else {
+                artData = (Math.random() > 0.5) ? await fetchAIC() : await fetchTheMet();
+                artData.title = await translateTitle(artData.title);
+                finalImgSource = artData.img;
+            }
+
+            if (finalImgSource) {
+                const processed = await processImg(finalImgSource);
+                if (processed) {
+                    const maxH = 110; const maxW = 180;
+                    let imgH = maxH; let imgW = imgH / processed.ratio;
+                    if (imgW > maxW) { imgW = maxW; imgH = imgW * processed.ratio; }
+                    doc.addImage(processed.data, 'JPEG', (210 - imgW) / 2, 130, imgW, imgH);
+                    doc.setFontSize(10); 
+                    doc.text(doc.splitTextToSize(artData.title.toUpperCase(), 160), 105, 130 + imgH + 10, { align: 'center' });
+                }
+            }
+            // Guardar con nombre de comisión
+            const fileName = `ASISTENCIA_${comisionText.split(' ')[0]}_${dateStr.replace(/\//g, '-')}.pdf`;
+            doc.save(fileName);
+        } catch (err) {
+            console.error(err);
+            alert("Error generando PDF. Intenta de nuevo.");
+        } finally {
+            btn.innerText = "Descargar PDF"; btn.disabled = false;
+        }
+    }
+</script>
 </body>
 </html>
