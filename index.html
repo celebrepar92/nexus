@@ -8,19 +8,39 @@
     <link rel="icon" href="favicon.png" type="image/png">
     <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <script>
-    netlifyIdentity.on('init', user => {
-        if (!user) {
-            document.getElementById("adminPanel").style.display = "none";
-        } else {
-            document.getElementById("adminPanel").style.display = "block";
-            checkStatus();
-        }
-        });
+  // Manejo de la identidad y acceso
+  netlifyIdentity.on('init', user => {
+    if (!user) {
+      // Si no hay usuario, nos aseguramos de que el panel esté oculto
+      document.getElementById("adminPanel").style.display = "none";
+      netlifyIdentity.open(); // Abre el modal de login automáticamente
+    } else {
+      // Si ya hay usuario al cargar, mostramos el panel directamente
+      activarPanel(user);
+    }
+  });
 
-        netlifyIdentity.on('login', user => {
-        location.reload(); // Recarga para mostrar el contenido al entrar
-        });
-        </script>
+  netlifyIdentity.on('login', user => {
+    netlifyIdentity.close(); // Cerramos el modal de login
+    activarPanel(user);      // Activamos el panel sin recargar la página
+  });
+
+  netlifyIdentity.on('logout', () => {
+    // Al cerrar sesión, aquí sí conviene recargar para limpiar todo rastro
+    location.reload();
+  });
+
+  function activarPanel(user) {
+    const panel = document.getElementById("adminPanel");
+    if (panel) {
+      panel.style.display = "block";
+      // Llamamos a la función que consulta el estado en Google Apps Script
+      if (typeof checkStatus === "function") {
+        checkStatus();
+      }
+    }
+  }
+</script>
     <style>
         body { font-family: 'Courier New', Courier, monospace; background: #f4f4f4; display: flex; justify-content: center; padding: 20px; }
         .config-panel { border: 2px solid #000; padding: 30px; width: 450px; background: #fff; box-shadow: 10px 10px 0px #000; }
