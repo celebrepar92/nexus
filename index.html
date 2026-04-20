@@ -2,121 +2,239 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Nexus - Asistencia TTFG</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus - Gestión de Asistencia</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="icon" href="favicon.png" type="image/png">
     <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-    <script>
-  // Manejo de la identidad y acceso
-  netlifyIdentity.on('init', user => {
-    if (!user) {
-      // Si no hay usuario, nos aseguramos de que el panel esté oculto
-      document.getElementById("adminPanel").style.display = "none";
-      netlifyIdentity.open(); // Abre el modal de login automáticamente
-    } else {
-      // Si ya hay usuario al cargar, mostramos el panel directamente
-      activarPanel(user);
-    }
-  });
+    <link rel="icon" href="favicon.png" type="image/png">
 
-  netlifyIdentity.on('login', user => {
-    netlifyIdentity.close(); // Cerramos el modal de login
-    activarPanel(user);      // Activamos el panel sin recargar la página
-  });
-
-  netlifyIdentity.on('logout', () => {
-    // Al cerrar sesión, aquí sí conviene recargar para limpiar todo rastro
-    location.reload();
-  });
-
-  function activarPanel(user) {
-    const panel = document.getElementById("adminPanel");
-    if (panel) {
-      panel.style.display = "block";
-      // Llamamos a la función que consulta el estado en Google Apps Script
-      if (typeof checkStatus === "function") {
-        checkStatus();
-      }
-    }
-  }
-</script>
     <style>
-        body { font-family: 'Courier New', Courier, monospace; background: #f4f4f4; display: flex; justify-content: center; padding: 20px; }
-        .config-panel { border: 2px solid #000; padding: 30px; width: 450px; background: #fff; box-shadow: 10px 10px 0px #000; }
-        h1 { font-size: 1.1rem; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 8px; margin: 0 0 20px 0; }
-        h2 { font-size: 0.8rem; text-transform: uppercase; margin-top: 20px; border-top: 1px solid #ccc; pt: 10px; color: #666; }
-        .group { margin-bottom: 12px; }
-        label { display: block; font-size: 9px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
-        input, select { width: 100%; padding: 8px; border: 1px solid #000; box-sizing: border-box; font-family: inherit; font-size: 13px; }
-        .row { display: flex; gap: 10px; }
-        button { width: 100%; padding: 15px; background: #000; color: #fff; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; margin-top: 20px; }
-        button:hover { background: #333; }
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        body { 
+            font-family: 'Inter', -apple-system, sans-serif; 
+            background: var(--bg); 
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Navbar Moderna */
+        nav {
+            width: 100%;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand { font-weight: 800; font-size: 1.2rem; letter-spacing: -0.5px; color: var(--primary); }
+
+        /* Contenedor Principal */
+        #adminPanel {
+            width: 100%;
+            max-width: 500px;
+            padding: 40px 20px;
+            box-sizing: border-box;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 30px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        h2 { font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+
+        /* Inputs y Formulario */
+        .group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
+        input, select { 
+            width: 100%; padding: 10px 12px; border: 1px solid var(--border); 
+            border-radius: 8px; font-family: inherit; font-size: 14px; 
+            transition: border-color 0.2s; outline: none;
+        }
+        input:focus { border-color: var(--primary); }
+
+        .row { display: flex; gap: 12px; }
+
+        /* Botones */
+        .btn { 
+            width: 100%; padding: 12px; border: none; border-radius: 8px; 
+            font-weight: 600; text-transform: uppercase; cursor: pointer; 
+            transition: all 0.2s; font-size: 0.85rem;
+        }
+        
+        #testModeBtn { margin-bottom: 25px; color: white; }
+        #genBtn { background: var(--primary); color: white; margin-top: 10px; }
+        #genBtn:hover { background: var(--primary-hover); }
+        #genBtn:disabled { background: var(--border); cursor: not-allowed; }
+
+        .note { font-size: 11px; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
+
         #qr-hidden, #temp-canvas { display: none; }
-        .note { font-size: 10px; color: #666; font-style: italic; margin-top: 5px; }
     </style>
 </head>
 <body>
-    <div data-netlify-identity-button></div>
+
+    <nav>
+        <div class="brand">NEXUS</div>
+        <div data-netlify-identity-button></div>
+    </nav>
+
     <div id="adminPanel" style="display: none;">
-    <div class="config-panel">
-        <h1 style="margin-bottom:0px !important;">NEXUS - Asistencia TTFG</h1>
-        <button id="testModeBtn" id="genBtn" class="btn btn-off" onclick="toggleMode()">Cargando estado...</button>
-
-        <br><br>
         
-        <div class="group">
-            <label>Tipo de formulario (link)</label>
-            <select id="urlInput">
-                <option value="https://forms.gle/brSJRWUR3K5Khzvs5">INVESTIGACIÓN (brSJR...)</option>
-                <option value="https://forms.gle/5TKAKNPiqyU6ab8N8">INTERVENCIÓN (5TKAK...)</option>
-            </select>
-        </div>
-        <div class="row">
-            <div class="group" style="flex: 2;">
-                <label>Horario</label>
-                <input type="text" id="scheduleInput" value="9:00 a 11:00">
-            </div>
-            <div class="group" style="flex: 2;">
-                <label>Fecha de clase</label>
-                <input type="date" id="dateInput">
-            </div>
+        <div class="card">
+            <h2>Control de Acceso</h2>
+            <button id="testModeBtn" class="btn" onclick="toggleMode()">Cargando estado...</button>
+            <p class="note">Si la asistencia está <b>DESACTIVADA</b>, el sistema rechazará automáticamente cualquier envío fuera de horario.</p>
         </div>
 
-        <h2>Obra de arte personalizada (opcional)</h2>
-        <p class="note">Si se deja vacío, se usará una obra aleatoria de museos.</p>
-        
-        <div class="group">
-            <label>Subir imagen o pegar URL</label>
-            <input type="file" id="fileInput" accept="image/*" style="margin-bottom: 5px; border: none; padding: 0;">
-            <input type="text" id="customImgUrl" placeholder="https://url-de-la-imagen.jpg">
-        </div>
-        
-        <div class="group">
-            <label>Título de la obra</label>
-            <input type="text" id="customTitle" placeholder="Ej: La Noche Estrellada">
+        <div class="card">
+            <h2>Configuración de Clase</h2>
+            
+            <div class="group">
+                <label>Comisión / Formulario</label>
+                <select id="urlInput">
+                    <option value="https://forms.gle/brSJRWUR3K5Khzvs5">INVESTIGACIÓN (RF-INV)</option>
+                    <option value="https://forms.gle/5TKAKNPiqyU6ab8N8">INTERVENCIÓN (RF-INT)</option>
+                </select>
+            </div>
+
+            <div class="row">
+                <div class="group" style="flex: 1;">
+                    <label>Horario</label>
+                    <input type="text" id="scheduleInput" value="9:00 a 11:00">
+                </div>
+                <div class="group" style="flex: 1;">
+                    <label>Fecha</label>
+                    <input type="date" id="dateInput">
+                </div>
+            </div>
+
+            <h2 style="margin-top: 20px;">Personalización de Arte</h2>
+            
+            <div class="group">
+                <label>Imagen (Archivo o URL)</label>
+                <input type="file" id="fileInput" accept="image/*" style="margin-bottom: 8px;">
+                <input type="text" id="customImgUrl" placeholder="https://url-de-la-imagen.jpg">
+            </div>
+            
+            <div class="group">
+                <label>Título de la Obra</label>
+                <input type="text" id="customTitle" placeholder="Ej: La Noche Estrellada">
+            </div>
+
+            <div class="row">
+                <div class="group" style="flex: 2;">
+                    <label>Artista</label>
+                    <input type="text" id="customArtist" placeholder="Vincent van Gogh">
+                </div>
+                <div class="group" style="flex: 1;">
+                    <label>Año</label>
+                    <input type="text" id="customYear" placeholder="1889">
+                </div>
+            </div>
+
+            <button id="genBtn" class="btn" onclick="generatePDF()">Generar PDF de Asistencia</button>
         </div>
 
-        <div class="row">
-            <div class="group" style="flex: 2;">
-                <label>Artista</label>
-                <input type="text" id="customArtist" placeholder="Ej: Vincent van Gogh">
-            </div>
-            <div class="group" style="flex: 1;">
-                <label>Año</label>
-                <input type="text" id="customYear" placeholder="Ej: 1889">
-            </div>
-        </div>
-
-        <button id="genBtn" onclick="generatePDF()">Generar PDF</button>
+        <div id="qr-hidden"></div>
+        <canvas id="temp-canvas"></canvas>
     </div>
 
-    <div id="qr-hidden"></div>
-    <canvas id="temp-canvas"></canvas>
-
-
-    </div>
     <script>
+        /* LÓGICA DE IDENTIDAD (Netlify Identity) 
+        */
+        netlifyIdentity.on('init', user => {
+            if (!user) {
+                document.getElementById("adminPanel").style.display = "none";
+                netlifyIdentity.open();
+            } else {
+                activarPanel();
+            }
+        });
+
+        netlifyIdentity.on('login', () => {
+            netlifyIdentity.close();
+            activarPanel();
+        });
+
+        netlifyIdentity.on('logout', () => location.reload());
+
+        function activarPanel() {
+            document.getElementById("adminPanel").style.display = "block";
+            checkStatus();
+        }
+
+        /* LÓGICA DE GOOGLE APPS SCRIPT (Misma que ya tenías)
+        */
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyCz0xuSeFIHzZSUrKketDJPbPGUF4BGs2bVbCU2LcqgHFyQW-udbmE_l-UGLAHjfE7hQ/exec";
+        const statusBtn = document.getElementById('testModeBtn');
+
+        async function checkStatus() {
+            try {
+                const response = await fetch(WEB_APP_URL, { mode: 'cors' });
+                const data = await response.json();
+                updateButtonUI(data.testMode);
+            } catch (err) {
+                statusBtn.innerText = "Error de conexión";
+            }
+        }
+
+        async function toggleMode() {
+            if (statusBtn.disabled) return;
+            statusBtn.disabled = true;
+            statusBtn.innerText = "Actualizando...";
+            try {
+                const response = await fetch(`${WEB_APP_URL}?action=toggle`, { mode: 'cors' });
+                const data = await response.json();
+                updateButtonUI(data.testMode);
+            } catch (err) {
+                alert("Error al cambiar el estado");
+            } finally {
+                statusBtn.disabled = false;
+            }
+        }
+
+        function updateButtonUI(isTestMode) {
+            if (isTestMode) {
+                statusBtn.innerText = "ASISTENCIA: DESACTIVADA (MODO PRUEBA)";
+                statusBtn.style.backgroundColor = "#ef4444"; // Rojo moderno
+            } else {
+                statusBtn.innerText = "ASISTENCIA: ACTIVADA (MODO REAL)";
+                statusBtn.style.backgroundColor = "#10b981"; // Verde moderno
+            }
+        }
+
+        /* LÓGICA DE GENERACIÓN DE PDF (Se mantiene intacta) 
+        */
+        // ... (Aquí va todo tu código de translateTitle, fetchAIC, fetchTheMet, processImg, getFileData y generatePDF exactamente como los tenías)
+        // [Copiado de tu index.html original para asegurar que el PDF no cambie]
+        
         async function translateTitle(text) {
             try {
                 const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`);
@@ -163,11 +281,8 @@
                     const ctx = canvas.getContext('2d');
                     canvas.width = 1000;
                     canvas.height = (img.height / img.width) * 1000;
-                    
-                    // FIX: Pintar fondo blanco para evitar fondo negro en PNGs transparentes
                     ctx.fillStyle = "#ffffff";
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
-                    
                     ctx.filter = 'grayscale(100%) contrast(1.2) brightness(1.05)';
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     resolve({ data: canvas.toDataURL('image/jpeg', 0.8), ratio: img.height / img.width });
@@ -186,12 +301,12 @@
         }
 
         async function generatePDF() {
-            const btn = document.getElementById('genBtn');
+            const btnGen = document.getElementById('genBtn');
             const fileInput = document.getElementById('fileInput');
             const customUrl = document.getElementById('customImgUrl').value;
             
-            btn.innerText = "PROCESANDO...";
-            btn.disabled = true;
+            btnGen.innerText = "PROCESANDO...";
+            btnGen.disabled = true;
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ unit: 'mm', format: 'a4' });
@@ -202,12 +317,10 @@
             const d = dateVal ? new Date(dateVal + "T12:00:00") : new Date();
             const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
-            // PDF HEADER
             doc.setFont("courier", "bold");
             doc.setFontSize(18);
             doc.text(`ASISTENCIA TALLER TFG - ${dateStr}`, 15, 20);
             
-            // AGREGAR IDENTICON CON FONDO BLANCO FORZADO
             const identiconUrl = `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(url)}&backgroundColor=ffffff`;
             const identicon = await processImg(identiconUrl);
             if (identicon) {
@@ -219,7 +332,6 @@
             doc.setFont("courier", "normal");
             doc.setFontSize(9);
 
-            // Generar QR
             const qrDiv = document.getElementById('qr-hidden');
             qrDiv.innerHTML = "";
             new QRCode(qrDiv, { text: url, width: 400, height: 400, colorDark: "#000" });
@@ -234,7 +346,6 @@
             doc.setLineWidth(0.1);
             doc.line(40, 122, 170, 122);
 
-            // LÓGICA DE ARTE
             let artData = null;
             let finalImgSource = null;
 
@@ -257,16 +368,15 @@
                 };
             } 
             else {
-                btn.innerText = "BUSCANDO EN MUSEOS...";
+                btnGen.innerText = "BUSCANDO EN MUSEOS...";
                 artData = (Math.random() > 0.5) ? await fetchAIC() : await fetchTheMet();
                 artData.title = await translateTitle(artData.title);
                 finalImgSource = artData.img;
             }
 
             if (finalImgSource) {
-                btn.innerText = "PROCESANDO IMAGEN...";
+                btnGen.innerText = "PROCESANDO IMAGEN...";
                 const processed = await processImg(finalImgSource);
-                
                 if (processed) {
                     const maxH = 115; 
                     const maxW = 180;
@@ -294,65 +404,9 @@
             doc.setLineWidth(0.5);
             doc.line(95, 285, 115, 285);
             doc.save(`ASISTENCIA_TFG_${dateStr.replace(/\//g, '-')}.pdf`);
-            btn.innerText = "Generar PDF";
-            btn.disabled = false;
+            btnGen.innerText = "Generar PDF de Asistencia";
+            btnGen.disabled = false;
         }
-
-        // ACTIVAR Y DESACTIVAR TEST MODE
-        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyCz0xuSeFIHzZSUrKketDJPbPGUF4BGs2bVbCU2LcqgHFyQW-udbmE_l-UGLAHjfE7hQ/exec"; // <--- PEGA TU URL AQUÍ
-        const btn = document.getElementById('testModeBtn');
-
-  async function checkStatus() {
-    try {
-      // Usamos 'cors' explícitamente
-      const response = await fetch(WEB_APP_URL, {
-        method: 'GET',
-        mode: 'cors',
-        headers: { 'Content-Type': 'text/plain' }
-      });
-      
-      const data = await response.json();
-      updateButtonUI(data.testMode);
-    } catch (err) {
-      console.error("Error al cargar:", err);
-      btn.innerText = "Error (Mira la consola F12)";
-    }
-  }
-
-  async function toggleMode() {
-    if (btn.disabled) return;
-    
-    btn.disabled = true;
-    btn.innerText = "Cambiando...";
-    
-    try {
-      // IMPORTANTE: Agregamos el parámetro toggle
-      const response = await fetch(`${WEB_APP_URL}?action=toggle`, {
-        method: 'GET',
-        mode: 'cors'
-      });
-      const data = await response.json();
-      updateButtonUI(data.testMode);
-    } catch (err) {
-      console.error("Error al cambiar:", err);
-      alert("No se pudo cambiar el modo. Revisa la consola.");
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  function updateButtonUI(isTestMode) {
-    if (isTestMode) {
-      btn.innerText = "DESACTIVAR ASISTENCIA";
-      btn.style.backgroundColor = "#880808"; // Rojo
-    } else {
-      btn.innerText = "ACTIVAR ASISTENCIA";
-      btn.style.backgroundColor = "#008000"; // Verde
-    }
-  }
-
-  // Ejecutar al cargar
-  checkStatus();
     </script>
 </body>
 </html>
