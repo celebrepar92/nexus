@@ -13,7 +13,7 @@
         h2 { font-size: 0.8rem; text-transform: uppercase; margin-top: 20px; border-top: 1px solid #ccc; pt: 10px; color: #666; }
         .group { margin-bottom: 12px; }
         label { display: block; font-size: 9px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
-        input { width: 100%; padding: 8px; border: 1px solid #000; box-sizing: border-box; font-family: inherit; font-size: 13px; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #000; box-sizing: border-box; font-family: inherit; font-size: 13px; }
         .row { display: flex; gap: 10px; }
         button { width: 100%; padding: 15px; background: #000; color: #fff; border: none; cursor: pointer; font-weight: bold; text-transform: uppercase; margin-top: 20px; }
         button:hover { background: #333; }
@@ -27,8 +27,11 @@
         <h1>Generador de QR - Asistencia TTFG</h1>
         
         <div class="group">
-            <label>Link del Formulario</label>
-            <input type="text" id="urlInput" value="https://forms.gle/brSJRWUR3K5Khzvs5">
+            <label>Tipo de Formulario (Link)</label>
+            <select id="urlInput">
+                <option value="https://forms.gle/brSJRWUR3K5Khzvs5">INVESTIGACIÓN (brSJR...)</option>
+                <option value="https://forms.gle/5TKAKNPiqyU6ab8N8">INTERVENCIÓN (5TKAK...)</option>
+            </select>
         </div>
         <div class="row">
             <div class="group" style="flex: 2;">
@@ -119,6 +122,11 @@
                     const ctx = canvas.getContext('2d');
                     canvas.width = 1000;
                     canvas.height = (img.height / img.width) * 1000;
+                    
+                    // FIX: Pintar fondo blanco para evitar fondo negro en PNGs transparentes
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
                     ctx.filter = 'grayscale(100%) contrast(1.2) brightness(1.05)';
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     resolve({ data: canvas.toDataURL('image/jpeg', 0.8), ratio: img.height / img.width });
@@ -128,7 +136,6 @@
             });
         }
 
-        // Leer archivo local
         function getFileData(file) {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -148,7 +155,6 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF({ unit: 'mm', format: 'a4' });
 
-            // Datos del formulario
             const url = document.getElementById('urlInput').value;
             const schedule = document.getElementById('scheduleInput').value;
             const dateVal = document.getElementById('dateInput').value;
@@ -159,11 +165,18 @@
             doc.setFont("courier", "bold");
             doc.setFontSize(18);
             doc.text(`ASISTENCIA TALLER TFG - ${dateStr}`, 15, 20);
+            
+            // AGREGAR IDENTICON CON FONDO BLANCO FORZADO
+            const identiconUrl = `https://api.dicebear.com/9.x/identicon/png?seed=${encodeURIComponent(url)}&backgroundColor=ffffff`;
+            const identicon = await processImg(identiconUrl);
+            if (identicon) {
+                doc.addImage(identicon.data, 'JPEG', 183, 8, 12, 12);
+            }
+
             doc.setLineWidth(0.5);
             doc.line(15, 22, 195, 22);
             doc.setFont("courier", "normal");
             doc.setFontSize(9);
-            // doc.text(`FORMULARIO DISPONIBLE DE ${schedule.toUpperCase()}`, 15, 27);
 
             // Generar QR
             const qrDiv = document.getElementById('qr-hidden');
@@ -184,7 +197,6 @@
             let artData = null;
             let finalImgSource = null;
 
-            // 1. Prioridad: Archivo subido
             if (fileInput.files && fileInput.files[0]) {
                 finalImgSource = await getFileData(fileInput.files[0]);
                 artData = {
@@ -194,7 +206,6 @@
                     ref: "REF_SML"
                 };
             } 
-            // 2. Segunda prioridad: URL manual
             else if (customUrl) {
                 finalImgSource = customUrl;
                 artData = {
@@ -204,7 +215,6 @@
                     ref: "CUSTOM_URL"
                 };
             } 
-            // 3. Por defecto: API
             else {
                 btn.innerText = "BUSCANDO EN MUSEOS...";
                 artData = (Math.random() > 0.5) ? await fetchAIC() : await fetchTheMet();
