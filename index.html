@@ -85,10 +85,13 @@
         /* Formulario Compacto */
         .group { margin-bottom: 16px; }
         label { display: block; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
-        input, select { 
+        input, select, textarea { 
             width: 100%; padding: 10px; border: 1px solid var(--border); 
             border-radius: 6px; font-size: 14px; background: #f9fafb;
+            font-family: inherit;
+            box-sizing: border-box;
         }
+        textarea { resize: vertical; min-height: 60px; }
         .row { display: flex; gap: 12px; }
 
         #genBtn { 
@@ -146,6 +149,12 @@
                     <input type="text" id="customArtist" placeholder="Artista" style="flex:2;">
                     <input type="text" id="customYear" placeholder="Año" style="flex:1;">
                 </div>
+            </div>
+
+            <div class="group">
+                <label>Descripción / Contexto (opcional)</label>
+                <textarea id="customDescription" placeholder="Breve contexto de la obra: movimiento, técnica, motivo, etc. Si se deja vacío y la obra es automática, se intentará usar la info del museo."></textarea>
+                <p class="note">Se imprime debajo de los datos de la obra en el PDF.</p>
             </div>
 
             <button id="genBtn" onclick="generatePDF()">Descargar PDF</button>
@@ -206,8 +215,40 @@
 
     // --- GENERACIÓN DE PDF ---
     async function translateTitle(text) { try { const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`); const data = await res.json(); return data.responseData.translatedText; } catch (e) { return text; } }
-    async function fetchAIC() { const seed = Math.floor(Math.random() * 800); const r = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=painting&query[term][is_public_domain]=true&limit=1&page=${seed}&fields=title,artist_title,date_display,image_id`); const data = await r.json(); const art = data.data[0]; return { title: art.title, artist: art.artist_title || "Desconocido", date: art.date_display || "s/f", img: `https://www.artic.edu/iiif/2/${art.image_id}/full/1000,/0/default.jpg`, ref: `AIC_${art.image_id.substring(0,6)}` }; }
-    async function fetchTheMet() { const rSearch = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?isHighlight=true&q=painting&hasImages=true`); const dataSearch = await rSearch.json(); const randomId = dataSearch.objectIDs[Math.floor(Math.random() * dataSearch.objectIDs.length)]; const rObj = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${randomId}`); const art = await rObj.json(); return { title: art.title, artist: art.artistDisplayName || "Desconocido", date: art.objectDate || "s/f", img: art.primaryImageSmall || art.primaryImage, ref: `MET_${art.objectID}` }; }
+
+    // Quita etiquetas HTML de un string (útil para la descripción del AIC, que viene con <p>, <em>, etc.)
+    function stripHtml(html) {
+        if (!html) return "";
+        const tmp = document.createElement("div");
+        tmp.innerHTML = html;
+        return (tmp.textContent || tmp.innerText || "").replace(/\s+/g, ' ').trim();
+    }
+
+    async function fetchAIC() {
+        const seed = Math.floor(Math.random() * 800);
+        const r = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=painting&query[term][is_public_domain]=true&limit=1&page=${seed}&fields=title,artist_title,date_display,image_id,description,medium_display,style_title`);
+        const data = await r.json();
+        const art = data.data[0];
+        let description = stripHtml(art.description);
+        if (!description) {
+            // Fallback: armamos un contexto breve con medio/estilo si no hay descripción larga
+            const parts = [art.style_title, art.medium_display].filter(Boolean);
+            description = parts.length ? parts.join(" — ") : "";
+        }
+        return { title: art.title, artist: art.artist_title || "Desconocido", date: art.date_display || "s/f", img: `https://www.artic.edu/iiif/2/${art.image_id}/full/1000,/0/default.jpg`, ref: `AIC_${art.image_id.substring(0,6)}`, description };
+    }
+
+    async function fetchTheMet() {
+        const rSearch = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?isHighlight=true&q=painting&hasImages=true`);
+        const dataSearch = await rSearch.json();
+        const randomId = dataSearch.objectIDs[Math.floor(Math.random() * dataSearch.objectIDs.length)];
+        const rObj = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${randomId}`);
+        const art = await rObj.json();
+        // El Met no tiene un campo de descripción largo; armamos contexto con lo disponible
+        const parts = [art.culture, art.period, art.medium, art.creditLine].filter(Boolean);
+        const description = parts.join(" — ");
+        return { title: art.title, artist: art.artistDisplayName || "Desconocido", date: art.objectDate || "s/f", img: art.primaryImageSmall || art.primaryImage, ref: `MET_${art.objectID}`, description };
+    }
     
     function processImg(url) { 
     return new Promise((resolve) => { 
@@ -291,23 +332,29 @@
         let artData = null; let finalImgSource = null;
         const fileInput = document.getElementById('fileInput');
         const customUrl = document.getElementById('customImgUrl').value;
+        const manualDescription = document.getElementById('customDescription').value.trim();
 
         if (fileInput.files[0]) {
             finalImgSource = await getFileData(fileInput.files[0]);
-            artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f" };
+            artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f", description: "" };
         } else if (customUrl) {
             finalImgSource = customUrl;
-            artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f" };
+            artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f", description: "" };
         } else {
             artData = (Math.random() > 0.5) ? await fetchAIC() : await fetchTheMet();
             artData.title = await translateTitle(artData.title);
-            finalImgSource = artData.img;
         }
+        finalImgSource = finalImgSource || artData.img;
+
+        // La descripción manual, si existe, siempre tiene prioridad sobre la del museo
+        const descriptionText = manualDescription || artData.description || "";
 
         if (finalImgSource) {
             const processed = await processImg(finalImgSource);
             if (processed) {
-                const maxH = 105; const maxW = 175;
+                // Si hay descripción, dejamos un poco menos de alto a la imagen para que entre el texto
+                const maxH = descriptionText ? 92 : 105;
+                const maxW = 175;
                 let imgH = maxH; let imgW = imgH / processed.ratio;
                 if (imgW > maxW) { imgW = maxW; imgH = imgW * processed.ratio; }
                 const imgY = 130;
@@ -320,6 +367,17 @@
                 // Artista y año en mayúsculas
                 doc.setFont("courier", "normal"); doc.setFontSize(9);
                 doc.text(`ARTISTA: ${artData.artist.toUpperCase()} | AÑO: ${artData.date}`, 105, imgY + imgH + 16, { align: 'center' });
+
+                // Descripción / contexto, debajo del título y artista
+                if (descriptionText) {
+                    doc.setFont("courier", "normal"); doc.setFontSize(8);
+                    const lines = doc.splitTextToSize(descriptionText, 160).slice(0, 4); // máx. 4 líneas
+                    let lineY = imgY + imgH + 23;
+                    lines.forEach(line => {
+                        doc.text(line, 105, lineY, { align: 'center' });
+                        lineY += 4;
+                    });
+                }
             }
         }
 
