@@ -373,7 +373,7 @@
                     doc.setFont("courier", "normal"); doc.setFontSize(8);
                     const lines = doc.splitTextToSize(descriptionText, 160).slice(0, 4); // máx. 4 líneas
                     let lineY = imgY + imgH + 23;
-                    descriptionText.forEach(line => {
+                    lines.forEach(line => {
                         doc.text(line, 105, lineY, { align: 'center' });
                         lineY += 4;
                     });
