@@ -272,13 +272,15 @@ function loadPoem() {
   return state.poemP;
 }
 function introText(p) {
-  return `Debate imaginario entre Aristóteles, Hegel y Marx sobre ${p.tema || "la vida"}, escrito por una inteligencia artificial (${AI_MODEL}).`;
+  const n = (p.filosofos && p.filosofos.length) ? p.filosofos : ["Aristóteles", "Hegel", "Marx"];
+  const lst = n.length > 1 ? n.slice(0, -1).join(", ") + " y " + n[n.length - 1] : n[0];
+  return `Debate imaginario entre ${lst} sobre ${p.tema || "la vida"}, escrito por una inteligencia artificial (${AI_MODEL}).`;
 }
 const tituloTema = p => { const t = String(p.tema || "la vida"); return t.charAt(0).toUpperCase() + t.slice(1); };
 function renderPoem() {
   const box = $("poemBox"); box.textContent = "";
   const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "Aristóteles, Hegel y Marx están debatiendo…");
+  if (state.poemP) return add("sk", "Tres filósofos están debatiendo…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
   add("m", "DEBATE FILOSÓFICO GENERADO CON IA");
@@ -446,48 +448,60 @@ function drawArt(doc, a, top, bottom) {
 }
 
 // Diálogo filosófico: cada intervención va en su propio cuadro (nombre a la izquierda, texto a la derecha).
-// Arriba va un breve texto que explica qué es. La tipografía se achica hasta que todo entre en el espacio disponible.
-function drawPoem(doc, p, top, bottom) {
+// La tipografía se mantiene cómoda (10 pt como máximo, 9 pt como mínimo): si el debate no entra en la primera
+// página, sigue en la/s siguiente/s en lugar de achicarse hasta quedar amontonado. Un cuadro nunca se corta entre páginas.
+// nextPage() agrega una hoja (con su encabezado) y devuelve { top, bottom }.
+function drawPoem(doc, p, top, bottom, nextPage) {
   const X = 15, W = 180, avail = bottom - top;
-  const GREYS = [226, 244, 208, 236]; // un gris distinto por personaje (se distingue aunque se imprima en blanco y negro)
+  const GREYS = [212, 238, 188, 226]; // un gris distinto por personaje (se distingue aunque se imprima en blanco y negro)
   const intro = safe(introText(p)).trim();
   const rows = (p.dialogo || []).map(d => ({ who: safe(d.personaje).toUpperCase().trim(), text: safe(d.texto).trim() }));
   const order = []; rows.forEach(r => { if (!order.includes(r.who)) order.push(r.who); });
 
   const F = (st, size) => { doc.setFont("helvetica", st); doc.setFontSize(size); };
-  const padY = 1.5, gap = 1.3, HEAD = 14;
-  const boxH = (n, size, lh) => padY + size * .28 + (n - 1) * lh + padY + size * .07;
+  const padY = 1.9, gap = 1.8, HEAD = 15, HEADC = 9;
+  const boxH = (n, size, lh) => padY + size * .28 + (n - 1) * lh + padY + size * .07 + .4;
 
   function layout(fs) {
-    const lh = fs * .41, nfs = Math.min(fs, 8), padX = 2.2;
-    const items = []; let h = HEAD;
-    F("italic", fs); const il = doc.splitTextToSize(intro, W - 7);
-    items.push({ k: "intro", l: il, h: boxH(il.length, fs, lh) });
+    const lh = fs * .43, nfs = Math.min(fs - 1, 8.5), padX = 2.6;
+    const items = []; let total = 0;
+    F("italic", fs - .5); const il = doc.splitTextToSize(intro, W - 7);
+    items.push({ k: "intro", l: il, h: boxH(il.length, fs - .5, lh) });
     F("bold", nfs);
     const nw = Math.max(...order.map(n => doc.getTextWidth(n)), 0);
-    const nameW = Math.min(Math.max(nw + 2 * padX, 14), 36);
+    const nameW = Math.min(Math.max(nw + 2 * padX, 18), 40);
     rows.forEach(r => {
       F("bold", nfs); const nl = doc.splitTextToSize(r.who, nameW - 2 * padX);
       F("normal", fs); const tl = doc.splitTextToSize(r.text, W - nameW - 2 * padX);
       items.push({ k: "row", r, nl, tl, h: boxH(Math.max(nl.length, tl.length), fs, lh) });
     });
-    items.forEach(it => { h += it.h + gap; });
-    return { fs, lh, nfs, padX, nameW, items, h };
+    items.forEach(it => { total += it.h + gap; });
+    return { fs, lh, nfs, padX, nameW, items, total };
   }
 
-  let L;
-  for (const size of [10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5]) { L = layout(size); if (L.h <= avail) break; }
+  // Primero intenta que entre todo en la hoja 1 con letra cómoda; si no, 10 pt y sigue en las hojas siguientes.
+  let L = null;
+  for (const size of [10, 9.5, 9]) { const c = layout(size); if (HEAD + c.total <= avail) { L = c; break; } }
+  if (!L) L = layout(10);
 
   // Título
   doc.setTextColor(0);
   doc.setFont("courier", "normal"); doc.setFontSize(6.5);
   doc.text("DEBATE FILOSÓFICO", 105, top + 3.5, { align: "center" });
-  doc.setFont("courier", "bold"); doc.setFontSize(11.5);
+  doc.setFont("courier", "bold"); doc.setFontSize(12);
   doc.text(one(doc, safe(tituloTema(p)).toUpperCase(), 170), 105, top + 10, { align: "center" });
 
-  let y = top + HEAD;
-  doc.setLineWidth(.25);
+  let y = top + HEAD, lim = bottom;
+  const continuar = () => {
+    const np = nextPage(); lim = np.bottom; y = np.top + HEADC;
+    doc.setTextColor(90); doc.setFont("courier", "normal"); doc.setFontSize(7);
+    doc.text("DEBATE FILOSÓFICO · " + one(doc, safe(tituloTema(p)).toUpperCase(), 110) + " · CONTINUACIÓN", 105, np.top + 3.5, { align: "center" });
+    doc.setTextColor(0);
+  };
+
   L.items.forEach(it => {
+    if (y + it.h > lim) continuar();
+    doc.setLineWidth(.25); doc.setLineDashPattern([], 0);
     if (it.k === "row") {
       const g = GREYS[order.indexOf(it.r.who) % GREYS.length];
       doc.setFillColor(g, g, g); doc.roundedRect(X, y, W, it.h, 1.2, 1.2, "F");
@@ -502,8 +516,8 @@ function drawPoem(doc, p, top, bottom) {
     } else if (it.k === "intro") {
       doc.setDrawColor(90); doc.setLineDashPattern([1.2, 1], 0);
       doc.roundedRect(X, y, W, it.h, 1.2, 1.2, "S"); doc.setLineDashPattern([], 0);
-      doc.setTextColor(40); F("italic", L.fs);
-      const base = y + padY + L.fs * .28;
+      doc.setTextColor(40); F("italic", L.fs - .5);
+      const base = y + padY + (L.fs - .5) * .28;
       it.l.forEach((l, i) => doc.text(l, X + 3.5, base + i * L.lh));
     }
     y += it.h + gap;
@@ -546,10 +560,18 @@ async function generatePDF() {
     if (compact) drawAttendanceQRCompact(doc, com.url, genStr); else drawAttendanceQR(doc, com.url, genStr);
 
     const top = compact ? 93 : 127, bottom = com.wa ? 248 : 287;
-    if (content && content.poem) drawPoem(doc, content.poem, top, bottom);
+    const nextPage = () => { doc.addPage(); drawHeader(doc, com.nombre, dateStr); return { top: 38, bottom: 285 }; };
+    if (content && content.poem) drawPoem(doc, content.poem, top, bottom, nextPage);
     else if (content && content.art) drawArt(doc, content.art, top, bottom);
 
-    if (com.wa) drawWA(doc, com.wa, com.nombre);
+    if (com.wa) { doc.setPage(1); drawWA(doc, com.wa, com.nombre); }
+
+    // Numeración de páginas (solo si el debate ocupó más de una hoja)
+    const np = doc.getNumberOfPages();
+    if (np > 1) for (let i = 1; i <= np; i++) {
+      doc.setPage(i); doc.setTextColor(90); doc.setFont("courier", "normal"); doc.setFontSize(7);
+      doc.text(`Pág. ${i}/${np}`, 195, 292, { align: "right" });
+    }
 
     const clean = com.nombre.normalize("NFD").replace(/[̀-ͯ]/g, "");
     doc.save(`Asistencia_${clean}_${dateStr.replace(/\//g, "-")}.pdf`);
