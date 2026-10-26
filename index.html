@@ -64,6 +64,9 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
 .poem .m{font-size:.78rem;color:var(--mut);font-style:italic;margin:2px 0 10px}
 .poem .v{white-space:pre-wrap;font-size:.95rem;line-height:1.5}
 .poem .c{margin-top:12px;padding-top:10px;border-top:1px solid var(--bd);font-size:.8rem;color:var(--mut);font-style:italic}
+.poem .acot{font-style:italic;color:var(--mut);font-size:.88rem;margin:0 0 8px}
+.poem .l{font-size:.95rem;line-height:1.45;margin:0 0 7px}
+.poem .l b{font-size:.78rem;letter-spacing:.04em}
 .poem .sk{color:var(--mut);font-style:italic;animation:p 1.2s ease-in-out infinite}
 @keyframes p{50%{opacity:.4}}
 .link{background:none;border:0;padding:0;margin-top:10px;color:var(--fg);font:inherit;font-size:.82rem;font-weight:600;text-decoration:underline;cursor:pointer}
@@ -107,7 +110,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
     <div class="group">
       <label>Contenido de la hoja</label>
       <div class="seg" id="segMode">
-        <button type="button" data-v="poema">Microrrelato IA</button>
+        <button type="button" data-v="poema">Obra de teatro IA</button>
         <button type="button" data-v="azar">Obra al azar</button>
         <button type="button" data-v="propia">Obra propia</button>
         <button type="button" data-v="solo">Solo QR</button>
@@ -115,7 +118,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
 
       <div id="pPoema">
         <div class="poem" id="poemBox"></div>
-        <button class="link" id="poemBtn" type="button">↻ Otro microrrelato</button>
+        <button class="link" id="poemBtn" type="button">↻ Otra obra</button>
       </div>
 
       <p class="note hide" id="pAzar">Se elige una pintura de dominio público (Art Institute of Chicago o The Met), en blanco y negro.</p>
@@ -254,7 +257,7 @@ async function fetchPoem() {
   const r = await fetch("/.netlify/functions/poema", { headers: { Authorization: "Bearer " + token } });
   let data = {}; try { data = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(data.error || ("error " + r.status));
-  if (!data.texto) throw new Error("respuesta vacía");
+  if (!data.dialogo || !data.dialogo.length) throw new Error("respuesta vacía");
   return data;
 }
 function loadPoem() {
@@ -271,12 +274,18 @@ function loadPoem() {
 function renderPoem() {
   const box = $("poemBox"); box.textContent = "";
   const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "La IA está escribiendo un microrrelato…");
+  if (state.poemP) return add("sk", "La compañía está ensayando…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
-  add("m", "MICRORRELATO GENERADO CON IA" + (p.autor ? " · en el tono de " + p.autor : ""));
+  add("m", "OBRA GENERADA CON IA · " + (p.compania || "El Telón Remendado").toUpperCase() + (p.autor ? " · en el tono de " + p.autor : ""));
   add("t", "\u201C" + p.titulo + "\u201D");
-  add("v", p.texto);
+  if (p.escena) add("acot", "(" + p.escena + ")");
+  p.dialogo.forEach(d => {
+    const e = document.createElement("div"); e.className = "l";
+    const w = document.createElement("b"); w.textContent = (d.actor + (d.papel ? " (" + d.papel + ")" : "")).toUpperCase() + ": ";
+    e.appendChild(w); e.appendChild(document.createTextNode(d.texto)); box.appendChild(e);
+  });
+  if (p.telon) add("acot", "(" + p.telon + ")");
   if (p.comentario) add("c", "Comentario de la IA: " + p.comentario);
 }
 
@@ -421,36 +430,47 @@ function drawArt(doc, a, top, bottom) {
   dl.forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 4; });
 }
 
-// Microrrelato: se achica la tipografía hasta que todo entre en el espacio disponible
+// Obra de teatro: se achica la tipografía hasta que todo entre en el espacio disponible
 function drawPoem(doc, p, top, bottom) {
-  const X = 30, W = 150, avail = bottom - top;
-  const poem = safe(p.texto).trim();
-  const note = `Microrrelato escrito por una inteligencia artificial (${AI_MODEL})` + (p.autor ? ` en el tono de ${safe(p.autor)}` : "") + ", generado automáticamente.";
+  const X = 28, W = 154, avail = bottom - top;
+  const note = `Obra escrita por una inteligencia artificial (${AI_MODEL})` + (p.autor ? ` en el tono de ${safe(p.autor)}` : "") + ", generada automáticamente.";
   const comment = p.comentario ? "Comentario de la IA: " + safe(p.comentario).trim() : "";
 
-  let fs = 10.5, lines, nL, cL, lh;
-  for (const size of [10.5, 10, 9.5, 9, 8.5, 8, 7.5]) {
-    fs = size; lh = size * .47;
-    doc.setFont("courier", "normal"); doc.setFontSize(size);
-    lines = [];
-    poem.split("\n").forEach(l => {
-      if (!l.trim()) { if (lines.length && lines[lines.length - 1] !== null) lines.push(null); }
-      else doc.splitTextToSize(l, W).forEach(w => lines.push(w));
+  // Bloques [estilo, texto]: acotaciones en cursiva, diálogos en normal
+  const blocks = [];
+  if (p.escena) blocks.push(["italic", "(" + safe(p.escena).trim() + ")"]);
+  (p.dialogo || []).forEach(d => {
+    const who = safe(d.actor).toUpperCase() + (d.papel ? " (" + safe(d.papel) + ")" : "");
+    blocks.push(["normal", who + ": " + safe(d.texto).trim()]);
+  });
+  if (p.telon) blocks.push(["italic", "(" + safe(p.telon).trim() + ")"]);
+
+  let fs = 10, lines, nL, cL, lh;
+  for (const size of [10, 9.5, 9, 8.5, 8, 7.5, 7]) {
+    fs = size; lh = size * .47; lines = [];
+    blocks.forEach(([st, t]) => {
+      doc.setFont("courier", st); doc.setFontSize(size);
+      doc.splitTextToSize(t, W).forEach(l => lines.push([st, l]));
+      lines.push(null); // espacio entre intervenciones
     });
     doc.setFont("courier", "italic"); doc.setFontSize(8);
     nL = doc.splitTextToSize(note, W); cL = comment ? doc.splitTextToSize(comment, W).slice(0, 8) : [];
-    const poemH = lines.reduce((s, l) => s + (l === null ? lh * .8 : lh), 0);
-    if (18 + poemH + 5 + (nL.length + cL.length) * 3.8 + 2 <= avail) break;
+    const h = lines.reduce((s, l) => s + (l === null ? lh * .5 : lh), 0);
+    if (18 + h + 5 + (nL.length + cL.length) * 3.8 + 2 <= avail) break;
   }
 
   let y = top + 3;
   doc.setFont("courier", "normal"); doc.setFontSize(7);
-  doc.text("MICRORRELATO GENERADO CON IA", 105, y, { align: "center" }); y += 6;
+  doc.text(safe((p.compania || "El Telón Remendado")).toUpperCase() + " · OBRA EN UN ACTO", 105, y, { align: "center" }); y += 6;
   doc.setFont("courier", "bold"); doc.setFontSize(12);
   doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 160) + "\u201D", 105, y, { align: "center" }); y += 9;
 
-  doc.setFont("courier", "normal"); doc.setFontSize(fs);
-  lines.forEach(l => { if (l === null) y += lh * .8; else { doc.text(l, X, y); y += lh; } });
+  doc.setFontSize(fs);
+  lines.forEach(l => {
+    if (l === null) { y += lh * .5; return; }
+    doc.setFont("courier", l[0]); doc.setFontSize(fs);
+    doc.text(l[1], X, y); y += lh;
+  });
 
   y += 1; doc.setLineWidth(.2); doc.line(X, y, X + W, y); y += 5;
   doc.setFont("courier", "italic"); doc.setFontSize(8);
