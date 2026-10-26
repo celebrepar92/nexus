@@ -107,7 +107,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
     <div class="group">
       <label>Contenido de la hoja</label>
       <div class="seg" id="segMode">
-        <button type="button" data-v="poema">Microcuento IA</button>
+        <button type="button" data-v="poema">Reflexión IA</button>
         <button type="button" data-v="azar">Obra al azar</button>
         <button type="button" data-v="propia">Obra propia</button>
         <button type="button" data-v="solo">Solo QR</button>
@@ -115,7 +115,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
 
       <div id="pPoema">
         <div class="poem" id="poemBox"></div>
-        <button class="link" id="poemBtn" type="button">↻ Otro microcuento</button>
+        <button class="link" id="poemBtn" type="button">↻ Otra reflexión</button>
       </div>
 
       <p class="note hide" id="pAzar">Se elige una pintura de dominio público (Art Institute of Chicago o The Met), en blanco y negro.</p>
@@ -271,13 +271,12 @@ function loadPoem() {
 function renderPoem() {
   const box = $("poemBox"); box.textContent = "";
   const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "La IA está escribiendo un microcuento…");
+  if (state.poemP) return add("sk", "La IA está pensando en voz alta…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
-  add("m", "CUENTO GENERADO CON IA");
+  add("m", "REFLEXIÓN GENERADA CON IA");
   add("t", "\u201C" + p.titulo + "\u201D");
-  add("v", p.poema);
-  add("c", "Microcuento compuesto por IA. Comentario de su autor IA: " + p.comentario);
+  add("v", p.texto);
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -424,9 +423,9 @@ function drawArt(doc, a, top, bottom) {
 // Poema: se achica la tipografía hasta que todo entre en el espacio disponible
 function drawPoem(doc, p, top, bottom) {
   const X = 30, W = 150, avail = bottom - top;
-  const poem = safe(p.poema).trim();
-  const note = `Microcuento compuesto por una inteligencia artificial (${AI_MODEL}), generado automáticamente.`;
-  const comment = `Comentario de su autor IA: "${safe(p.comentario).replace(/\s+/g, " ").trim()}"`;
+  const poem = safe(p.texto).trim();
+  const note = `Reflexión compuesta por una inteligencia artificial (${AI_MODEL}), generada automáticamente.`;
+  const comment = "";
 
   let fs = 10.5, lines, nL, cL, lh;
   for (const size of [10.5, 10, 9.5, 9, 8.5, 8, 7.5]) {
@@ -438,14 +437,14 @@ function drawPoem(doc, p, top, bottom) {
       else doc.splitTextToSize(l, W).forEach(w => lines.push(w));
     });
     doc.setFont("courier", "italic"); doc.setFontSize(8);
-    nL = doc.splitTextToSize(note, W); cL = doc.splitTextToSize(comment, W).slice(0, 7);
+    nL = doc.splitTextToSize(note, W); cL = comment ? doc.splitTextToSize(comment, W).slice(0, 7) : [];
     const poemH = lines.reduce((s, l) => s + (l === null ? lh * .8 : lh), 0);
     if (18 + poemH + 5 + (nL.length + cL.length) * 3.8 + 2 <= avail) break;
   }
 
   let y = top + 3;
   doc.setFont("courier", "normal"); doc.setFontSize(7);
-  doc.text("CUENTO GENERADO CON IA", 105, y, { align: "center" }); y += 6;
+  doc.text("REFLEXIÓN GENERADA CON IA", 105, y, { align: "center" }); y += 6;
   doc.setFont("courier", "bold"); doc.setFontSize(12);
   doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 160) + "\u201D", 105, y, { align: "center" }); y += 9;
 
@@ -469,7 +468,7 @@ async function generatePDF() {
     // 1) Contenido (lo único que usa red)
     let content = null, warn = "";
     try {
-      if (state.mode === "poema") { setBusy(true, "Esperando al autor…"); content = { poem: await loadPoem() }; }
+      if (state.mode === "poema") { setBusy(true, "Esperando a la IA…"); content = { poem: await loadPoem() }; }
       else if (state.mode === "azar") { setBusy(true, "Buscando una obra…"); content = { art: await getRandomArt() }; }
       else if (state.mode === "propia") content = { art: await getOwnArt() };
       if (content && content.art) {
