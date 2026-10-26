@@ -107,7 +107,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
     <div class="group">
       <label>Contenido de la hoja</label>
       <div class="seg" id="segMode">
-        <button type="button" data-v="poema">Reflexión IA</button>
+        <button type="button" data-v="poema">Microrrelato IA</button>
         <button type="button" data-v="azar">Obra al azar</button>
         <button type="button" data-v="propia">Obra propia</button>
         <button type="button" data-v="solo">Solo QR</button>
@@ -115,7 +115,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
 
       <div id="pPoema">
         <div class="poem" id="poemBox"></div>
-        <button class="link" id="poemBtn" type="button">↻ Otra reflexión</button>
+        <button class="link" id="poemBtn" type="button">↻ Otro microrrelato</button>
       </div>
 
       <p class="note hide" id="pAzar">Se elige una pintura de dominio público (Art Institute of Chicago o The Met), en blanco y negro.</p>
@@ -271,12 +271,13 @@ function loadPoem() {
 function renderPoem() {
   const box = $("poemBox"); box.textContent = "";
   const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "La IA está pensando en voz alta…");
+  if (state.poemP) return add("sk", "La IA está escribiendo un microrrelato…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
-  add("m", "REFLEXIÓN GENERADA CON IA");
+  add("m", "MICRORRELATO GENERADO CON IA" + (p.autor ? " · en el tono de " + p.autor : ""));
   add("t", "\u201C" + p.titulo + "\u201D");
   add("v", p.texto);
+  if (p.comentario) add("c", "Comentario de la IA: " + p.comentario);
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -420,12 +421,12 @@ function drawArt(doc, a, top, bottom) {
   dl.forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 4; });
 }
 
-// Poema: se achica la tipografía hasta que todo entre en el espacio disponible
+// Microrrelato: se achica la tipografía hasta que todo entre en el espacio disponible
 function drawPoem(doc, p, top, bottom) {
   const X = 30, W = 150, avail = bottom - top;
   const poem = safe(p.texto).trim();
-  const note = `Reflexión compuesta por una inteligencia artificial (${AI_MODEL}), generada automáticamente.`;
-  const comment = "";
+  const note = `Microrrelato escrito por una inteligencia artificial (${AI_MODEL})` + (p.autor ? ` en el tono de ${safe(p.autor)}` : "") + ", generado automáticamente.";
+  const comment = p.comentario ? "Comentario de la IA: " + safe(p.comentario).trim() : "";
 
   let fs = 10.5, lines, nL, cL, lh;
   for (const size of [10.5, 10, 9.5, 9, 8.5, 8, 7.5]) {
@@ -437,14 +438,14 @@ function drawPoem(doc, p, top, bottom) {
       else doc.splitTextToSize(l, W).forEach(w => lines.push(w));
     });
     doc.setFont("courier", "italic"); doc.setFontSize(8);
-    nL = doc.splitTextToSize(note, W); cL = comment ? doc.splitTextToSize(comment, W).slice(0, 7) : [];
+    nL = doc.splitTextToSize(note, W); cL = comment ? doc.splitTextToSize(comment, W).slice(0, 8) : [];
     const poemH = lines.reduce((s, l) => s + (l === null ? lh * .8 : lh), 0);
     if (18 + poemH + 5 + (nL.length + cL.length) * 3.8 + 2 <= avail) break;
   }
 
   let y = top + 3;
   doc.setFont("courier", "normal"); doc.setFontSize(7);
-  doc.text("REFLEXIÓN GENERADA CON IA", 105, y, { align: "center" }); y += 6;
+  doc.text("MICRORRELATO GENERADO CON IA", 105, y, { align: "center" }); y += 6;
   doc.setFont("courier", "bold"); doc.setFontSize(12);
   doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 160) + "\u201D", 105, y, { align: "center" }); y += 9;
 
