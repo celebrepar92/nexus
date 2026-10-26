@@ -275,9 +275,9 @@ function renderPoem() {
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
   add("t", p.titulo);
-  add("m", "al estilo de " + p.autor + (p.tema ? " · " + p.tema : ""));
+  if (p.tema) add("m", p.tema);
   add("v", p.poema);
-  add("c", "Microcuento compuesto por IA. Explicación de su autora: " + p.comentario);
+  add("c", "Microcuento compuesto por IA. Comentario de su autor IA: " + p.comentario);
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -424,10 +424,9 @@ function drawArt(doc, a, top, bottom) {
 // Poema: se achica la tipografía hasta que todo entre en el espacio disponible
 function drawPoem(doc, p, top, bottom) {
   const X = 30, W = 150, avail = bottom - top;
-  const autor = safe(p.autor) || "un autor";
   const poem = safe(p.poema).trim();
-  const note = `Microcuento compuesto por una inteligencia artificial (${AI_MODEL}), generado automáticamente e inspirado en el estilo de ${autor}. No es obra de ese autor.`;
-  const comment = `Explicación de su autora: "${safe(p.comentario).replace(/\s+/g, " ").trim()}"`;
+  const note = `Microcuento compuesto por una inteligencia artificial (${AI_MODEL}), generado automáticamente.`;
+  const comment = `Comentario de su autor IA: "${safe(p.comentario).replace(/\s+/g, " ").trim()}"`;
 
   let fs = 10.5, lines, nL, cL, lh;
   for (const size of [10.5, 10, 9.5, 9, 8.5, 8, 7.5]) {
@@ -448,7 +447,7 @@ function drawPoem(doc, p, top, bottom) {
   doc.setFont("courier", "bold"); doc.setFontSize(12);
   doc.text(one(doc, safe(p.titulo).toUpperCase(), 170), 105, y, { align: "center" }); y += 5.5;
   doc.setFont("courier", "italic"); doc.setFontSize(8);
-  doc.text(one(doc, `al estilo de ${autor}` + (p.tema ? ` · ${safe(p.tema)}` : ""), 180), 105, y, { align: "center" }); y += 9;
+  doc.text(one(doc, p.tema ? safe(p.tema) : "", 180), 105, y, { align: "center" }); y += 9;
 
   doc.setFont("courier", "normal"); doc.setFontSize(fs);
   lines.forEach(l => { if (l === null) y += lh * .8; else { doc.text(l, X, y); y += lh; } });
@@ -470,7 +469,7 @@ async function generatePDF() {
     // 1) Contenido (lo único que usa red)
     let content = null, warn = "";
     try {
-      if (state.mode === "poema") { setBusy(true, "Esperando a la autora…"); content = { poem: await loadPoem() }; }
+      if (state.mode === "poema") { setBusy(true, "Esperando al autor…"); content = { poem: await loadPoem() }; }
       else if (state.mode === "azar") { setBusy(true, "Buscando una obra…"); content = { art: await getRandomArt() }; }
       else if (state.mode === "propia") content = { art: await getOwnArt() };
       if (content && content.art) {
