@@ -110,7 +110,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
     <div class="group">
       <label>Contenido de la hoja</label>
       <div class="seg" id="segMode">
-        <button type="button" data-v="poema">Diálogo filosófico IA</button>
+        <button type="button" data-v="poema">Debate filosófico IA</button>
         <button type="button" data-v="azar">Obra al azar</button>
         <button type="button" data-v="propia">Obra propia</button>
         <button type="button" data-v="solo">Solo QR</button>
@@ -118,7 +118,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
 
       <div id="pPoema">
         <div class="poem" id="poemBox"></div>
-        <button class="link" id="poemBtn" type="button">↻ Otro diálogo</button>
+        <button class="link" id="poemBtn" type="button">↻ Otro debate</button>
       </div>
 
       <p class="note hide" id="pAzar">Se elige una pintura de dominio público (Art Institute of Chicago o The Met), en blanco y negro.</p>
@@ -272,16 +272,16 @@ function loadPoem() {
   return state.poemP;
 }
 function introText(p) {
-  return `Diálogo filosófico escrito por una inteligencia artificial (${AI_MODEL}) entre Dudo y Dado sobre ${p.tema || "la vida"}.`;
+  return `Debate imaginario entre Aristóteles, Hegel y Marx sobre ${p.tema || "la vida"}, escrito por una inteligencia artificial (${AI_MODEL}).`;
 }
 const tituloTema = p => { const t = String(p.tema || "la vida"); return t.charAt(0).toUpperCase() + t.slice(1); };
 function renderPoem() {
   const box = $("poemBox"); box.textContent = "";
   const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "Dudo y Dado están conversando…");
+  if (state.poemP) return add("sk", "Aristóteles, Hegel y Marx están debatiendo…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
-  add("m", "DIÁLOGO FILOSÓFICO GENERADO CON IA");
+  add("m", "DEBATE FILOSÓFICO GENERADO CON IA");
   add("t", tituloTema(p));
   add("acot", introText(p));
   p.dialogo.forEach(d => {
@@ -481,7 +481,7 @@ function drawPoem(doc, p, top, bottom) {
   // Título
   doc.setTextColor(0);
   doc.setFont("courier", "normal"); doc.setFontSize(6.5);
-  doc.text("DIÁLOGO FILOSÓFICO", 105, top + 3.5, { align: "center" });
+  doc.text("DEBATE FILOSÓFICO", 105, top + 3.5, { align: "center" });
   doc.setFont("courier", "bold"); doc.setFontSize(11.5);
   doc.text(one(doc, safe(tituloTema(p)).toUpperCase(), 170), 105, top + 10, { align: "center" });
 
