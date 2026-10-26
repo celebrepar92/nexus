@@ -274,8 +274,8 @@ function renderPoem() {
   if (state.poemP) return add("sk", "La IA está escribiendo un microcuento…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
-  add("t", p.titulo);
-  if (p.tema) add("m", p.tema);
+  add("m", "CUENTO GENERADO CON IA");
+  add("t", "\u201C" + p.titulo + "\u201D");
   add("v", p.poema);
   add("c", "Microcuento compuesto por IA. Comentario de su autor IA: " + p.comentario);
 }
@@ -443,11 +443,11 @@ function drawPoem(doc, p, top, bottom) {
     if (18 + poemH + 5 + (nL.length + cL.length) * 3.8 + 2 <= avail) break;
   }
 
-  let y = top + 4;
+  let y = top + 3;
+  doc.setFont("courier", "normal"); doc.setFontSize(7);
+  doc.text("CUENTO GENERADO CON IA", 105, y, { align: "center" }); y += 6;
   doc.setFont("courier", "bold"); doc.setFontSize(12);
-  doc.text(one(doc, safe(p.titulo).toUpperCase(), 170), 105, y, { align: "center" }); y += 5.5;
-  doc.setFont("courier", "italic"); doc.setFontSize(8);
-  doc.text(one(doc, p.tema ? safe(p.tema) : "", 180), 105, y, { align: "center" }); y += 9;
+  doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 160) + "\u201D", 105, y, { align: "center" }); y += 9;
 
   doc.setFont("courier", "normal"); doc.setFontSize(fs);
   lines.forEach(l => { if (l === null) y += lh * .8; else { doc.text(l, X, y); y += lh; } });
