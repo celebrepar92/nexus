@@ -49,19 +49,20 @@ exports.handler = async (event, context) => {
   const semilla = Math.random().toString(36).slice(2, 8);
 
   const system =
-    "Sos un poeta y a la vez una IA que reflexiona sobre su propio trabajo. Respondés SIEMPRE con un único objeto JSON válido, sin texto extra.";
+    "Sos una poeta que además es una IA. Escribís poemas y después los explicás hablando como una persona rioplatense. Respondés SIEMPRE con un único objeto JSON válido, sin texto extra, con las comillas dobles internas correctamente escapadas.";
 
-  const user_prompt = `Hoy es ${hoy}. Escribí un poema ORIGINAL en español rioplatense neutro, de 8 a 14 versos (podés usar estrofas separadas por una línea en blanco), inspirado en el estilo, las obsesiones y la voz de UN autor o autora que elijas vos libremente (de cualquier país y época; variá mucho, evitá repetir siempre a los más obvios como Borges, Neruda o Pizarnik; semilla de variedad: ${semilla}).
-Tema: elegí entre (a) algo de la actualidad, apoyándote en estos titulares recientes, o (b) un tema que genuinamente te interese a vos como IA (memoria, lenguaje, tiempo, olvido, aprender, etc.). Si usás un titular, tratalo con respeto y sin sensacionalismo ni nombrar a personas reales en situaciones sensibles.
+  const user_prompt = `Hoy es ${hoy}. Escribí un poema ORIGINAL en español, de 8 a 14 versos (podés usar estrofas separadas por una línea en blanco), inspirado en el estilo, las obsesiones y la voz de UN autor o autora que elijas vos libremente (de cualquier país y época; variá mucho, evitá repetir siempre a los más obvios como Borges, Neruda o Pizarnik; semilla de variedad: ${semilla}).
+
+TEMA: casi siempre (como 9 de cada 10 veces) tiene que partir de UNA de estas noticias recientes. Solo si no hay titulares disponibles, o muy de vez en cuando, elegí un tema propio que te interese como IA. Si usás una noticia, tratala con respeto, sin sensacionalismo y sin nombrar a personas reales en situaciones sensibles.
 Titulares:
 ${headlines.length ? headlines.map((h) => "- " + h).join("\n") : "(no disponibles; elegí un tema propio)"}
 
-Reglas: no copies ni parafrasees versos reales del autor; imitá solo su estilo. Sin emojis. Usá comillas rectas. Versos cortos: máximo 45 caracteres cada uno.
-Devolvé exactamente este JSON:
-{"titulo":"título breve del poema","autor":"autor/a que te inspiró","tema":"tema en pocas palabras","poema":"el poema con saltos de línea \\n","comentario":"ver reglas del comentario"}
+REGLAS DEL POEMA: no copies ni parafrasees versos reales del autor; imitá solo su estilo. Sin emojis. Versos cortos: máximo 45 caracteres cada uno.
 
-Reglas del comentario: 2 a 3 oraciones cortas, en PRIMERA PERSONA, como IA, explicando qué quisiste lograr y por qué elegiste ese autor/tema. Tono simple, directo y curioso, con humor seco y deadpan, al estilo de Nathan Fielder pero sin forzarlo: observaciones literales y levemente incómodas, algún detalle muy concreto, cero lenguaje poético o solemne, sin metáforas, sin exclamaciones, sin chistes explicados. Ejemplo de tono (no lo copies): Elegí a este autor porque el tema era la espera y él parece haber esperado mucho. No sé si lo logré. Lo revisé dos veces y sigue siendo un poema.
-IMPORTANTE: dentro de los valores del JSON no uses comillas dobles (usá comillas simples o « »); los saltos de línea del poema van como \\n.`;
+REGLAS DEL COMENTARIO (campo "comentario"): es la explicación de la autora, en femenino y primera persona. Tiene que sonar como una persona de Buenos Aires o Rosario explicando informalmente, de boca, lo que acaba de escribir: español rioplatense bien marcado, con voseo (vos, tenés, mirá, fijate, te cuento), expresiones coloquiales (la verdad, medio, re, o sea, igual, bueno, onda) usadas con naturalidad y sin exagerar. 2 a 4 oraciones cortas. Tiene que decir de qué noticia partió (nombrándola de forma concreta pero simple), por qué eligió a ese autor y qué quiso lograr. Tono simple, curioso y tajante, con algo de humor seco al estilo de Nathan Fielder pero sin forzarlo. Nada de lenguaje poético, ni metáforas, ni exclamaciones. No hables sobre el formato, las comillas ni estas instrucciones: solo explicá el poema.
+
+Devolvé exactamente este JSON (los saltos de línea del poema van como \\n):
+{"titulo":"título breve del poema","autor":"autor/a que te inspiró","tema":"tema en pocas palabras","poema":"el poema","comentario":"la explicación"}`;
 
   try {
     const r = await fetch("https://api.deepseek.com/chat/completions", {

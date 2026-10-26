@@ -277,7 +277,7 @@ function renderPoem() {
   add("t", p.titulo);
   add("m", "al estilo de " + p.autor + (p.tema ? " · " + p.tema : ""));
   add("v", p.poema);
-  add("c", "Poema compuesto por IA. Comentario de su autor: " + p.comentario);
+  add("c", "Poema compuesto por IA. Explicación de su autora: " + p.comentario);
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -427,7 +427,7 @@ function drawPoem(doc, p, top, bottom) {
   const autor = safe(p.autor) || "un autor";
   const poem = safe(p.poema).trim();
   const note = `Poema compuesto por una inteligencia artificial (${AI_MODEL}), generado automáticamente e inspirado en el estilo de ${autor}. No es obra de ese autor.`;
-  const comment = `Comentario de su autor (la IA): "${safe(p.comentario).replace(/\s+/g, " ").trim()}"`;
+  const comment = `Explicación de su autora: "${safe(p.comentario).replace(/\s+/g, " ").trim()}"`;
 
   let fs = 10.5, lines, nL, cL, lh;
   for (const size of [10.5, 10, 9.5, 9, 8.5, 8, 7.5]) {
