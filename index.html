@@ -1,398 +1,515 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus - Control de Asistencia</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
-    <link rel="icon" href="favicon.png" type="image/png">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus · Asistencia</title>
+<link rel="icon" href="favicon.png" type="image/png">
 
-    <style>
-        :root {
-            --primary: #111827;
-            --bg: #f3f4f6;
-            --card-bg: #ffffff;
-            --text-main: #111827;
-            --text-muted: #6b7280;
-            --border: #e5e7eb;
-            --success: #10b981;
-            --danger: #ef4444;
-        }
+<!-- El login es lo único que se necesita de inmediato; el resto carga en segundo plano -->
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
-            background: var(--bg); 
-            color: var(--text-main);
-            margin: 0;
-            padding-bottom: 40px;
-        }
+<style>
+:root{
+  --bg:#f5f5f4; --card:#fff; --fg:#18181b; --mut:#71717a; --bd:#e4e4e7; --soft:#fafafa;
+  --acc:#18181b; --on:#fff; --ok:#059669; --bad:#dc2626; --r:14px;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0c0c0e; --card:#16161a; --fg:#f4f4f5; --mut:#a1a1aa; --bd:#27272a; --soft:#1c1c21; --acc:#f4f4f5; --on:#111;}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding-bottom:48px}
 
-        /* Navbar Compacta y Responsiva */
-        nav {
-            background: #ffffff;
-            border-bottom: 1px solid var(--border);
-            padding: 12px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
+nav{position:sticky;top:0;z-index:10;display:flex;justify-content:space-between;align-items:center;
+  padding:12px 20px;background:var(--card);border-bottom:1px solid var(--bd)}
+.brand{font-weight:800;letter-spacing:.12em;font-size:.95rem}
+.netlify-identity-button{font-size:12px!important}
 
-        .brand { font-weight: 800; font-size: 1.1rem; letter-spacing: -0.5px; }
-        
-        /* Ajuste del widget de Netlify */
-        .netlify-identity-button { font-size: 12px !important; }
+.wrap{max-width:460px;margin:20px auto;padding:0 14px;display:none;gap:14px;flex-direction:column}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:18px}
 
-        /* Contenedor Único Compacto */
-        .container {
-            max-width: 480px;
-            margin: 20px auto;
-            padding: 0 15px;
-        }
+h2{margin:0 0 12px;font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+label{display:block;margin:0 0 6px;font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mut)}
+.group{margin-bottom:14px}.group:last-child{margin-bottom:0}
 
-        .card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            padding: 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
+input[type=text],input[type=date],textarea{
+  width:100%;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:var(--soft);
+  color:var(--fg);font:inherit;font-size:14px}
+input:focus,textarea:focus{outline:2px solid var(--acc);outline-offset:-1px}
+textarea{resize:vertical;min-height:64px}
+input[type=file]{font-size:13px;color:var(--mut);width:100%}
+.row{display:flex;gap:8px}.row>*{min-width:0}
 
-        /* Botón de Estado Integrado */
-        #testModeBtn {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            cursor: pointer;
-            transition: opacity 0.2s;
-            margin-bottom: 24px;
-            font-size: 0.85rem;
-        }
-        #testModeBtn:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Selectores segmentados */
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 1 0;min-width:110px;padding:10px 8px;border:1px solid var(--bd);border-radius:10px;background:var(--soft);
+  color:var(--fg);font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s}
+.seg button.on{background:var(--acc);color:var(--on);border-color:var(--acc)}
+.seg button:active{transform:scale(.98)}
 
-        h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin: 0 0 16px 0; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+/* Estado de asistencia */
+#statusBtn{width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;border:0;border-radius:12px;
+  color:#fff;font:inherit;font-weight:700;font-size:.85rem;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;
+  background:var(--mut);transition:.2s}
+#statusBtn::before{content:"";width:9px;height:9px;border-radius:50%;background:#fff;opacity:.9}
+#statusBtn[data-s=open]{background:var(--bad)}
+#statusBtn[data-s=closed]{background:var(--ok)}
+#statusBtn:disabled{opacity:.6;cursor:wait}
 
-        /* Formulario Compacto */
-        .group { margin-bottom: 16px; }
-        label { display: block; font-size: 0.7rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
-        input, select, textarea { 
-            width: 100%; padding: 10px; border: 1px solid var(--border); 
-            border-radius: 6px; font-size: 14px; background: #f9fafb;
-            font-family: inherit;
-            box-sizing: border-box;
-        }
-        textarea { resize: vertical; min-height: 60px; }
-        .row { display: flex; gap: 12px; }
+/* Poema */
+.poem{margin-top:12px;padding:14px;border:1px dashed var(--bd);border-radius:12px;background:var(--soft);font-family:Georgia,"Times New Roman",serif}
+.poem .t{font-weight:700;font-size:1.05rem;margin:0}
+.poem .m{font-size:.78rem;color:var(--mut);font-style:italic;margin:2px 0 10px}
+.poem .v{white-space:pre-wrap;font-size:.95rem;line-height:1.5}
+.poem .c{margin-top:12px;padding-top:10px;border-top:1px solid var(--bd);font-size:.8rem;color:var(--mut);font-style:italic}
+.poem .sk{color:var(--mut);font-style:italic;animation:p 1.2s ease-in-out infinite}
+@keyframes p{50%{opacity:.4}}
+.link{background:none;border:0;padding:0;margin-top:10px;color:var(--fg);font:inherit;font-size:.82rem;font-weight:600;text-decoration:underline;cursor:pointer}
 
-        #genBtn { 
-            width: 100%; padding: 14px; background: var(--primary); color: white; 
-            border: none; border-radius: 8px; font-weight: 700; cursor: pointer; margin-top: 8px;
-        }
-        
-        .note { font-size: 10px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
-
-        #qr-hidden, #temp-canvas { display: none; }
-
-        @media (max-width: 480px) {
-            .card { padding: 20px; }
-            .row { flex-direction: column; gap: 16px; }
-        }
-    </style>
+.note{margin:8px 0 0;font-size:11.5px;color:var(--mut)}
+#genBtn{width:100%;padding:15px;border:0;border-radius:12px;background:var(--acc);color:var(--on);font:inherit;font-weight:700;font-size:15px;cursor:pointer;transition:.15s}
+#genBtn:active{transform:scale(.99)}
+#genBtn:disabled{opacity:.6;cursor:wait}
+#msg{min-height:18px;margin:10px 0 0;font-size:12.5px;text-align:center;color:var(--mut)}
+#msg.err{color:var(--bad)}
+.hide{display:none!important}
+</style>
 </head>
 <body>
 
-    <nav>
-        <div class="brand">NEXUS</div>
-        <div data-netlify-identity-button></div>
-    </nav>
+<nav>
+  <div class="brand">NEXUS</div>
+  <div data-netlify-identity-button></div>
+</nav>
 
-    <div id="adminPanel" class="container" style="display: none;">
-        <div class="card">
-            <button id="testModeBtn" onclick="toggleMode()">Cargando...</button>
+<main id="panel" class="wrap">
 
-            <h2>Generador de PDF</h2>
-            
-            <div class="group">
-                <label>Comisión</label>
-                <select id="urlInput">
-                    <option value="https://forms.gle/brSJRWUR3K5Khzvs5">INVESTIGACIÓN (RF-INV)</option>
-                    <option value="https://forms.gle/5TKAKNPiqyU6ab8N8">INTERVENCIÓN (RF-INT)</option>
-                </select>
-            </div>
+  <section class="card">
+    <button id="statusBtn" data-s="load" type="button">Cargando…</button>
+  </section>
 
-           <div class="group">
-                <label>Fecha</label>
-                <input type="date" id="dateInput" style="max-width: 180px;">
-            </div>
+  <section class="card">
+    <h2>PDF de asistencia</h2>
 
-            <h2>Arte de la clase</h2>
-            <div class="group">
-                <label>Imagen o URL</label>
-                <input type="file" id="fileInput" accept="image/*" style="border:none; padding:0; background:none;">
-                <input type="text" id="customImgUrl" placeholder="Pega URL aquí..." style="margin-top:8px;">
-            </div>
-            
-            <div class="group">
-                <label>Título y Artista</label>
-                <input type="text" id="customTitle" placeholder="Título de la obra">
-                <div class="row" style="margin-top:8px;">
-                    <input type="text" id="customArtist" placeholder="Artista" style="flex:2;">
-                    <input type="text" id="customYear" placeholder="Año" style="flex:1;">
-                </div>
-            </div>
-
-            <div class="group">
-                <label>Descripción / Contexto (opcional)</label>
-                <textarea id="customDescription" placeholder="Breve contexto de la obra: movimiento, técnica, motivo, etc. Si se deja vacío y la obra es automática, se intentará usar la info del museo."></textarea>
-                <p class="note">Se imprime debajo de los datos de la obra en el PDF.</p>
-            </div>
-
-            <button id="genBtn" onclick="generatePDF()">Descargar PDF</button>
-            <p class="note">Si no hay arte manual, se buscará uno en museos.</p>
-        </div>
+    <div class="group">
+      <label>Comisión</label>
+      <div class="seg" id="segCom"></div>
+      <p class="note" id="waNote"></p>
     </div>
 
-    <script>
-    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyCz0xuSeFIHzZSUrKketDJPbPGUF4BGs2bVbCU2LcqgHFyQW-udbmE_l-UGLAHjfE7hQ/exec";
-    const statusBtn = document.getElementById('testModeBtn');
+    <div class="group">
+      <label for="dateInput">Fecha</label>
+      <input type="date" id="dateInput" style="max-width:190px">
+    </div>
 
-    // --- AUTENTICACIÓN ---
-    netlifyIdentity.on('init', user => {
-        if (!user) {
-            document.getElementById("adminPanel").style.display = "none";
-            netlifyIdentity.open();
-        } else { activarPanel(); }
+    <div class="group">
+      <label>Contenido de la hoja</label>
+      <div class="seg" id="segMode">
+        <button type="button" data-v="poema">Poema IA</button>
+        <button type="button" data-v="azar">Obra al azar</button>
+        <button type="button" data-v="propia">Obra propia</button>
+        <button type="button" data-v="solo">Solo QR</button>
+      </div>
+
+      <div id="pPoema">
+        <div class="poem" id="poemBox"></div>
+        <button class="link" id="poemBtn" type="button">↻ Otro poema</button>
+      </div>
+
+      <p class="note hide" id="pAzar">Se elige una pintura de dominio público (Art Institute of Chicago o The Met), en blanco y negro.</p>
+
+      <div id="pPropia" class="hide" style="margin-top:12px">
+        <div class="group">
+          <input type="file" id="fileInput" accept="image/*">
+          <input type="text" id="customImgUrl" placeholder="…o pegá la URL de una imagen" style="margin-top:8px">
+        </div>
+        <div class="group">
+          <input type="text" id="customTitle" placeholder="Título de la obra">
+          <div class="row" style="margin-top:8px">
+            <input type="text" id="customArtist" placeholder="Artista" style="flex:2">
+            <input type="text" id="customYear" placeholder="Año" style="flex:1">
+          </div>
+        </div>
+        <div class="group">
+          <textarea id="customDescription" placeholder="Contexto breve (opcional): movimiento, técnica, motivo…"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <button id="genBtn" type="button">Descargar PDF</button>
+    <p id="msg"></p>
+  </section>
+</main>
+
+<script>
+/* ================== CONFIG ================== */
+const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyCz0xuSeFIHzZSUrKketDJPbPGUF4BGs2bVbCU2LcqgHFyQW-udbmE_l-UGLAHjfE7hQ/exec";
+const AI_MODEL = "DeepSeek";
+const PDF_TITLE = "Asistencia Taller Producción TFG";
+// Para sumar el grupo de WhatsApp a otra comisión, completar "wa".
+const COMISIONES = {
+  inv: { nombre: "Investigación", url: "https://forms.gle/brSJRWUR3K5Khzvs5", wa: null },
+  int: { nombre: "Intervención",  url: "https://forms.gle/5TKAKNPiqyU6ab8N8", wa: "https://chat.whatsapp.com/FDW8p8PIyfH7G6fwg9NqYt" }
+};
+
+/* ================== UTILIDADES ================== */
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, "0");
+const store = {
+  get: (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+const state = { com: store.get("com", "inv"), mode: store.get("mode", "poema"), poem: null, poemP: null, poemErr: null };
+if (!COMISIONES[state.com]) state.com = "inv";
+
+function setMsg(t, err) { const m = $("msg"); m.textContent = t || ""; m.className = err ? "err" : ""; }
+function setBusy(b, label) { const g = $("genBtn"); g.disabled = b; g.textContent = b ? (label || "Procesando…") : "Descargar PDF"; }
+
+function bindSeg(el, onPick) {
+  el.addEventListener("click", e => {
+    const b = e.target.closest("button[data-v]"); if (!b) return;
+    onPick(b.dataset.v);
+  });
+}
+function markSeg(el, v) { [...el.children].forEach(b => b.classList.toggle("on", b.dataset.v === v)); }
+
+/* ================== AUTENTICACIÓN ================== */
+netlifyIdentity.on("init", user => { if (user) activarPanel(); else netlifyIdentity.open(); });
+netlifyIdentity.on("login", () => { netlifyIdentity.close(); activarPanel(); });
+netlifyIdentity.on("logout", () => location.reload());
+
+let panelListo = false;
+function activarPanel() {
+  $("panel").style.display = "flex";
+  if (panelListo) return; panelListo = true;
+  initUI();
+  checkStatus();
+  if (state.mode === "poema") loadPoem().catch(() => {});
+}
+
+/* ================== ESTADO DE ASISTENCIA ================== */
+const statusBtn = $("statusBtn");
+async function api(qs) {
+  const r = await fetch(WEB_APP_URL + (qs || ""), { mode: "cors" });
+  return r.json();
+}
+async function checkStatus() {
+  statusBtn.dataset.s = "load"; statusBtn.textContent = "Consultando…";
+  try { paintStatus((await api()).testMode); }
+  catch (e) { statusBtn.dataset.s = "err"; statusBtn.textContent = "Sin conexión · tocar para reintentar"; }
+}
+statusBtn.addEventListener("click", async () => {
+  if (statusBtn.disabled) return;
+  if (statusBtn.dataset.s === "err") return checkStatus();
+  statusBtn.disabled = true; statusBtn.textContent = "Procesando…";
+  try { paintStatus((await api("?action=toggle")).testMode); }
+  catch (e) { setMsg("No se pudo cambiar el estado.", true); checkStatus(); }
+  finally { statusBtn.disabled = false; }
+});
+function paintStatus(open) {
+  // true = asistencia activa (botón rojo para desactivar) | false = inactiva (botón verde para activar)
+  statusBtn.dataset.s = open ? "open" : "closed";
+  statusBtn.textContent = open ? "Desactivar asistencia" : "Activar asistencia";
+}
+
+/* ================== INTERFAZ ================== */
+function initUI() {
+  const segCom = $("segCom");
+  Object.entries(COMISIONES).forEach(([k, c]) => {
+    const b = document.createElement("button"); b.type = "button"; b.dataset.v = k; b.textContent = c.nombre; segCom.appendChild(b);
+  });
+  const paintCom = () => {
+    markSeg(segCom, state.com);
+    $("waNote").textContent = COMISIONES[state.com].wa ? "Incluye al pie el QR del grupo de WhatsApp de la comisión." : "";
+  };
+  bindSeg(segCom, v => { state.com = v; store.set("com", v); paintCom(); });
+  paintCom();
+
+  const d = new Date(); $("dateInput").value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const segMode = $("segMode");
+  const paintMode = () => {
+    markSeg(segMode, state.mode);
+    $("pPoema").classList.toggle("hide", state.mode !== "poema");
+    $("pAzar").classList.toggle("hide", state.mode !== "azar");
+    $("pPropia").classList.toggle("hide", state.mode !== "propia");
+  };
+  bindSeg(segMode, v => {
+    state.mode = v; store.set("mode", v); paintMode();
+    if (v === "poema") loadPoem().catch(() => {});
+  });
+  paintMode();
+
+  $("poemBtn").addEventListener("click", () => { if (state.poemP) return; state.poem = null; loadPoem().catch(() => {}); });
+  $("genBtn").addEventListener("click", generatePDF);
+}
+
+/* ================== POEMA (IA vía función de Netlify) ================== */
+async function fetchPoem() {
+  const user = netlifyIdentity.currentUser();
+  if (!user) throw new Error("sesión vencida, volvé a ingresar");
+  const token = await user.jwt();
+  const r = await fetch("/.netlify/functions/poema", { headers: { Authorization: "Bearer " + token } });
+  let data = {}; try { data = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(data.error || ("error " + r.status));
+  if (!data.poema) throw new Error("respuesta vacía");
+  return data;
+}
+function loadPoem() {
+  if (state.poem) return Promise.resolve(state.poem);
+  if (state.poemP) return state.poemP;
+  state.poemErr = null;
+  state.poemP = fetchPoem()
+    .then(p => (state.poem = p))
+    .catch(e => { state.poemErr = e.message; throw e; })
+    .finally(() => { state.poemP = null; renderPoem(); });
+  renderPoem();
+  return state.poemP;
+}
+function renderPoem() {
+  const box = $("poemBox"); box.textContent = "";
+  const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
+  if (state.poemP) return add("sk", "La IA está escribiendo un poema…");
+  if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
+  const p = state.poem; if (!p) return;
+  add("t", p.titulo);
+  add("m", "al estilo de " + p.autor + (p.tema ? " · " + p.tema : ""));
+  add("v", p.poema);
+  add("c", "IA: " + p.comentario);
+}
+
+/* ================== OBRAS DE MUSEOS ================== */
+const tfetch = (u, ms) => fetch(u, { signal: AbortSignal.timeout(ms || 8000) });
+async function translateTitle(t) {
+  try { const r = await tfetch("https://api.mymemory.translated.net/get?q=" + encodeURIComponent(t) + "&langpair=en|es", 4000); return (await r.json()).responseData.translatedText || t; }
+  catch (e) { return t; }
+}
+function stripHtml(h) { if (!h) return ""; const d = document.createElement("div"); d.innerHTML = h; return (d.textContent || "").replace(/\s+/g, " ").trim(); }
+
+async function fetchAIC() {
+  for (let i = 0; i < 3; i++) {
+    const page = 1 + Math.floor(Math.random() * 800);
+    const r = await tfetch(`https://api.artic.edu/api/v1/artworks/search?q=painting&query[term][is_public_domain]=true&limit=1&page=${page}&fields=title,artist_title,date_display,image_id,description,medium_display,style_title`);
+    const a = ((await r.json()).data || [])[0];
+    if (!a || !a.image_id) continue;
+    const desc = stripHtml(a.description) || [a.style_title, a.medium_display].filter(Boolean).join(" — ");
+    return { title: a.title, artist: a.artist_title || "Desconocido", date: a.date_display || "s/f", desc, src: `https://www.artic.edu/iiif/2/${a.image_id}/full/800,/0/default.jpg` };
+  }
+  throw new Error("AIC sin resultados");
+}
+let metIds = null;
+async function fetchMet() {
+  if (!metIds) {
+    const r = await tfetch("https://collectionapi.metmuseum.org/public/collection/v1/search?isHighlight=true&hasImages=true&q=painting");
+    metIds = (await r.json()).objectIDs || [];
+  }
+  for (let i = 0; i < 4; i++) {
+    const id = metIds[Math.floor(Math.random() * metIds.length)];
+    const a = await (await tfetch("https://collectionapi.metmuseum.org/public/collection/v1/objects/" + id)).json();
+    const src = a.primaryImageSmall || a.primaryImage; if (!src) continue;
+    return { title: a.title, artist: a.artistDisplayName || "Desconocido", date: a.objectDate || "s/f",
+      desc: [a.culture, a.period, a.medium, a.creditLine].filter(Boolean).join(" — "), src };
+  }
+  throw new Error("Met sin resultados");
+}
+async function getRandomArt() {
+  const order = Math.random() > 0.5 ? [fetchAIC, fetchMet] : [fetchMet, fetchAIC];
+  let art;
+  try { art = await order[0](); } catch (e) { art = await order[1](); }
+  art.title = await translateTitle(art.title);
+  return art;
+}
+function getFileData(f) { return new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsDataURL(f); }); }
+async function getOwnArt() {
+  const f = $("fileInput").files[0], u = $("customImgUrl").value.trim();
+  const src = f ? await getFileData(f) : u;
+  if (!src) return null;
+  return { title: $("customTitle").value.trim() || "Sin título", artist: $("customArtist").value.trim() || "Desconocido",
+    date: $("customYear").value.trim() || "s/f", desc: $("customDescription").value.trim(), src };
+}
+// Escala de grises + contraste, calculado a mano (ctx.filter no existe en Safari). Imagen liviana: 900px máx.
+function processImg(src) {
+  return new Promise(res => {
+    const img = new Image();
+    if (/^https?:/.test(src)) img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const W = Math.min(900, img.naturalWidth), H = Math.round(img.naturalHeight * W / img.naturalWidth);
+        const c = document.createElement("canvas"); c.width = W; c.height = H;
+        const x = c.getContext("2d", { willReadFrequently: true });
+        x.fillStyle = "#fff"; x.fillRect(0, 0, W, H); x.drawImage(img, 0, 0, W, H);
+        const d = x.getImageData(0, 0, W, H), p = d.data;
+        for (let i = 0; i < p.length; i += 4) {
+          let g = .299 * p[i] + .587 * p[i + 1] + .114 * p[i + 2];
+          g = ((g - 128) * 1.2 + 128) * 1.05; g = g < 0 ? 0 : g > 255 ? 255 : g;
+          p[i] = p[i + 1] = p[i + 2] = g;
+        }
+        x.putImageData(d, 0, 0);
+        res({ data: c.toDataURL("image/jpeg", .75), ratio: H / W });
+      } catch (e) { res(null); }
+    };
+    img.onerror = () => res(null);
+    img.src = src;
+  });
+}
+
+/* ================== DIBUJO DEL PDF ================== */
+// ==PDF-START==
+// jsPDF (fuentes estándar) solo soporta Latin-1 y algunos signos; se filtra el resto para que no salgan símbolos rotos.
+const safe = s => String(s == null ? "" : s).normalize("NFC").replace(/\r/g, "").replace(/[^\n\x20-\x7E -ÿ–—‘’“”…]/g, "");
+const one = (doc, s, w) => doc.splitTextToSize(s, w)[0] || "";
+
+// QR vectorial: nítido a cualquier tamaño, sin imágenes pesadas y sin esperas.
+function drawQR(doc, text, x, y, size) {
+  const qr = qrcode(0, "M"); qr.addData(text); qr.make();
+  const n = qr.getModuleCount(), q = 4, cell = size / (n + q * 2);
+  doc.setFillColor(0, 0, 0);
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++)
+    if (qr.isDark(r, c)) doc.rect(x + (c + q) * cell, y + (r + q) * cell, cell + .04, cell + .04, "F");
+  doc.link(x, y, size, size, { url: text });
+}
+
+function drawHeader(doc, comNombre, dateStr) {
+  doc.setTextColor(0); doc.setFont("courier", "bold"); doc.setFontSize(20);
+  doc.text(PDF_TITLE.toUpperCase(), 15, 21);
+  doc.setFontSize(13);
+  doc.text(`Comisión ${comNombre} — ${dateStr}`, 15, 29);
+  doc.setLineWidth(.5); doc.line(15, 33, 195, 33);
+}
+
+function drawAttendanceQR(doc, url, genStr) {
+  drawQR(doc, url, 72, 37, 66);
+  doc.setFont("courier", "bold"); doc.setFontSize(9);
+  doc.text("ESCANEÁ PARA REGISTRAR TU ASISTENCIA", 105, 108, { align: "center" });
+  doc.setFont("courier", "normal"); doc.setFontSize(7);
+  doc.text(url, 105, 113, { align: "center" });
+  doc.setFontSize(7.5);
+  doc.text(genStr, 105, 118, { align: "center" });
+  doc.setLineWidth(.3); doc.line(40, 122, 170, 122);
+}
+
+function drawWA(doc, url, comNombre) {
+  doc.setLineWidth(.3); doc.line(15, 251, 195, 251);
+  drawQR(doc, url, 15, 254, 32);
+  doc.setTextColor(0);
+  doc.setFont("courier", "bold"); doc.setFontSize(10);
+  doc.text("GRUPO DE WHATSAPP · " + comNombre.toUpperCase(), 52, 266);
+  doc.setFont("courier", "normal"); doc.setFontSize(8.5);
+  doc.text(doc.splitTextToSize("Escaneá el QR para sumarte al grupo de integrantes de la comisión.", 140), 52, 272);
+  doc.setFontSize(7);
+  doc.textWithLink(url.replace("https://", ""), 52, 281, { url });
+}
+
+// Obra de arte: imagen + título + artista + contexto
+function drawArt(doc, a, top, bottom) {
+  doc.setFont("courier", "bold"); doc.setFontSize(12);
+  const tl = doc.splitTextToSize(safe(a.title).toUpperCase(), 170).slice(0, 2);
+  doc.setFont("courier", "normal"); doc.setFontSize(8);
+  const dl = a.desc ? doc.splitTextToSize(safe(a.desc), 160).slice(0, 4) : [];
+  const textH = 6 + tl.length * 5.5 + 6 + dl.length * 4 + 2;
+  const maxH = Math.min(bottom - top - textH, 150), maxW = 175;
+  let h = maxH, w = h / a.img.ratio; if (w > maxW) { w = maxW; h = w * a.img.ratio; }
+  doc.addImage(a.img.data, "JPEG", (210 - w) / 2, top, w, h);
+  let y = top + h + 7;
+  doc.setFont("courier", "bold"); doc.setFontSize(12);
+  tl.forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 5.5; });
+  doc.setFont("courier", "normal"); doc.setFontSize(9);
+  doc.text(one(doc, `ARTISTA: ${safe(a.artist).toUpperCase()} | AÑO: ${safe(a.date)}`, 180), 105, y + .5, { align: "center" }); y += 6.5;
+  doc.setFontSize(8);
+  dl.forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 4; });
+}
+
+// Poema: se achica la tipografía hasta que todo entre en el espacio disponible
+function drawPoem(doc, p, top, bottom) {
+  const X = 30, W = 150, avail = bottom - top;
+  const autor = safe(p.autor) || "un autor";
+  const poem = safe(p.poema).trim();
+  const note = `Poema original generado automáticamente por una inteligencia artificial (${AI_MODEL}), inspirado en el estilo de ${autor}. No es obra de ese autor.`;
+  const comment = `Comentario de la IA: "${safe(p.comentario).replace(/\s+/g, " ").trim()}"`;
+
+  let fs = 10.5, lines, nL, cL, lh;
+  for (const size of [10.5, 10, 9.5, 9, 8.5, 8, 7.5]) {
+    fs = size; lh = size * .47;
+    doc.setFont("courier", "normal"); doc.setFontSize(size);
+    lines = [];
+    poem.split("\n").forEach(l => {
+      if (!l.trim()) { if (lines.length && lines[lines.length - 1] !== null) lines.push(null); }
+      else doc.splitTextToSize(l, W).forEach(w => lines.push(w));
     });
-    netlifyIdentity.on('login', () => { netlifyIdentity.close(); activarPanel(); });
-    netlifyIdentity.on('logout', () => location.reload());
+    doc.setFont("courier", "italic"); doc.setFontSize(8);
+    nL = doc.splitTextToSize(note, W); cL = doc.splitTextToSize(comment, W).slice(0, 7);
+    const poemH = lines.reduce((s, l) => s + (l === null ? lh * .8 : lh), 0);
+    if (18 + poemH + 5 + (nL.length + cL.length) * 3.8 + 2 <= avail) break;
+  }
 
-    function activarPanel() {
-        document.getElementById("adminPanel").style.display = "block";
-        checkStatus();
-    }
+  let y = top + 4;
+  doc.setFont("courier", "bold"); doc.setFontSize(12);
+  doc.text(one(doc, safe(p.titulo).toUpperCase(), 170), 105, y, { align: "center" }); y += 5.5;
+  doc.setFont("courier", "italic"); doc.setFontSize(8);
+  doc.text(one(doc, `al estilo de ${autor}` + (p.tema ? ` · ${safe(p.tema)}` : ""), 180), 105, y, { align: "center" }); y += 9;
 
-    // --- ESTADO DE ASISTENCIA ---
-    async function checkStatus() {
-        try {
-            const response = await fetch(WEB_APP_URL, { mode: 'cors' });
-            const data = await response.json();
-            updateButtonUI(data.testMode);
-        } catch (err) { statusBtn.innerText = "Error de conexión"; }
-    }
+  doc.setFont("courier", "normal"); doc.setFontSize(fs);
+  lines.forEach(l => { if (l === null) y += lh * .8; else { doc.text(l, X, y); y += lh; } });
 
-    async function toggleMode() {
-        if (statusBtn.disabled) return;
-        statusBtn.disabled = true;
-        statusBtn.innerText = "Procesando...";
-        try {
-            const response = await fetch(`${WEB_APP_URL}?action=toggle`, { mode: 'cors' });
-            const data = await response.json();
-            updateButtonUI(data.testMode);
-        } catch (err) { alert("Error al cambiar estado"); } 
-        finally { statusBtn.disabled = false; }
-    }
+  y += 1; doc.setLineWidth(.2); doc.line(X, y, X + W, y); y += 5;
+  doc.setFont("courier", "italic"); doc.setFontSize(8);
+  nL.forEach(l => { doc.text(l, X, y); y += 3.8; }); y += 2;
+  cL.forEach(l => { doc.text(l, X, y); y += 3.8; });
+}
+// ==PDF-END==
 
-    function updateButtonUI(isTestMode) {
-        // FALSE = Cerrada (Verde para activar) | TRUE = Abierta (Rojo para desactivar)
-        if (isTestMode) {
-            statusBtn.innerText = "Desactivar asistencia";
-            statusBtn.style.backgroundColor = "var(--danger)";
-        } else {
-            statusBtn.innerText = "Activar asistencia";
-            statusBtn.style.backgroundColor = "var(--success)";
-        }
-    }
+/* ================== GENERAR PDF ================== */
+async function generatePDF() {
+  const com = COMISIONES[state.com];
+  setBusy(true, "Preparando…"); setMsg("");
+  try {
+    if (!window.jspdf || typeof qrcode === "undefined") throw new Error("Las librerías todavía no cargaron. Probá de nuevo en unos segundos.");
 
-    // --- GENERACIÓN DE PDF ---
-    async function translateTitle(text) { try { const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|es`); const data = await res.json(); return data.responseData.translatedText; } catch (e) { return text; } }
-
-    // Quita etiquetas HTML de un string (útil para la descripción del AIC, que viene con <p>, <em>, etc.)
-    function stripHtml(html) {
-        if (!html) return "";
-        const tmp = document.createElement("div");
-        tmp.innerHTML = html;
-        return (tmp.textContent || tmp.innerText || "").replace(/\s+/g, ' ').trim();
-    }
-
-    async function fetchAIC() {
-        const seed = Math.floor(Math.random() * 800);
-        const r = await fetch(`https://api.artic.edu/api/v1/artworks/search?q=painting&query[term][is_public_domain]=true&limit=1&page=${seed}&fields=title,artist_title,date_display,image_id,description,medium_display,style_title`);
-        const data = await r.json();
-        const art = data.data[0];
-        let description = stripHtml(art.description);
-        if (!description) {
-            // Fallback: armamos un contexto breve con medio/estilo si no hay descripción larga
-            const parts = [art.style_title, art.medium_display].filter(Boolean);
-            description = parts.length ? parts.join(" — ") : "";
-        }
-        return { title: art.title, artist: art.artist_title || "Desconocido", date: art.date_display || "s/f", img: `https://www.artic.edu/iiif/2/${art.image_id}/full/1000,/0/default.jpg`, ref: `AIC_${art.image_id.substring(0,6)}`, description };
-    }
-
-    async function fetchTheMet() {
-        const rSearch = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/search?isHighlight=true&q=painting&hasImages=true`);
-        const dataSearch = await rSearch.json();
-        const randomId = dataSearch.objectIDs[Math.floor(Math.random() * dataSearch.objectIDs.length)];
-        const rObj = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${randomId}`);
-        const art = await rObj.json();
-        // El Met no tiene un campo de descripción largo; armamos contexto con lo disponible
-        const parts = [art.culture, art.period, art.medium, art.creditLine].filter(Boolean);
-        const description = parts.join(" — ");
-        return { title: art.title, artist: art.artistDisplayName || "Desconocido", date: art.objectDate || "s/f", img: art.primaryImageSmall || art.primaryImage, ref: `MET_${art.objectID}`, description };
-    }
-    
-    function processImg(url) { 
-    return new Promise((resolve) => { 
-        const img = new Image(); 
-        // Solo poner crossOrigin para URLs externas
-        if (url.startsWith('http')) img.crossOrigin = "Anonymous"; 
-        img.onload = () => { 
-            try {
-                const canvas = document.getElementById('temp-canvas'); 
-                const ctx = canvas.getContext('2d'); 
-                canvas.width = 1000; 
-                canvas.height = (img.height / img.width) * 1000; 
-                ctx.fillStyle = "#ffffff"; 
-                ctx.fillRect(0, 0, canvas.width, canvas.height); 
-                ctx.filter = 'grayscale(100%) contrast(1.2) brightness(1.05)'; 
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height); 
-                resolve({ data: canvas.toDataURL('image/jpeg', 0.8), ratio: img.height / img.width }); 
-            } catch(e) {
-                console.error("Canvas error:", e);
-                resolve(null);
-            }
-        }; 
-        img.onerror = (e) => { console.error("Image load error:", e); resolve(null); }
-        img.src = url; 
-    }); 
-    }
-
-    function getFileData(file) { return new Promise((resolve) => { const reader = new FileReader(); reader.onload = (e) => resolve(e.target.result); reader.readAsDataURL(file); }); }
-
-    async function generatePDF() {
-    const btn = document.getElementById('genBtn');
-    const urlInput = document.getElementById('urlInput');
-    // Extraer solo el código entre paréntesis no, sino el nombre limpio
-    const comisionRaw = urlInput.options[urlInput.selectedIndex].text;
-    const comisionText = comisionRaw.replace(/\s*\(.*?\)\s*/g, '').trim();
-
-    btn.innerText = "PROCESANDO..."; btn.disabled = true;
-
+    // 1) Contenido (lo único que usa red)
+    let content = null, warn = "";
     try {
-        const { jsPDF } = window.jspdf; 
-        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-        
-        const url = urlInput.value;
-        const dateVal = document.getElementById('dateInput').value;
-        const d = dateVal ? new Date(dateVal + "T12:00:00") : new Date();
-        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      if (state.mode === "poema") { setBusy(true, "Esperando al poeta…"); content = { poem: await loadPoem() }; }
+      else if (state.mode === "azar") { setBusy(true, "Buscando una obra…"); content = { art: await getRandomArt() }; }
+      else if (state.mode === "propia") content = { art: await getOwnArt() };
+      if (content && content.art) {
+        content.art.img = await processImg(content.art.src);
+        if (!content.art.img) { warn = "No se pudo cargar la imagen; el PDF salió sin la obra."; content = null; }
+      }
+    } catch (e) { warn = "No se pudo obtener el contenido (" + e.message + "). El PDF salió solo con el QR."; content = null; }
 
-        // Cabecera más grande
-        doc.setFont("courier", "bold"); doc.setFontSize(22);
-        doc.text(`ASISTENCIA TALLER TFG`, 15, 22);
+    // 2) Documento
+    setBusy(true, "Armando PDF…");
+    const doc = new window.jspdf.jsPDF({ unit: "mm", format: "a4", compress: true });
+    doc.setProperties({ title: PDF_TITLE + " — " + com.nombre });
 
-        doc.setFontSize(13);
-        doc.text(`Comisión ${comisionText} — ${dateStr}`, 15, 30);
+    const dv = $("dateInput").value;
+    const d = dv ? new Date(dv + "T12:00:00") : new Date(), now = new Date();
+    const dateStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    const genStr = `Generado: ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-        doc.setLineWidth(0.5); doc.line(15, 34, 195, 34);
+    drawHeader(doc, com.nombre, dateStr);
+    drawAttendanceQR(doc, com.url, genStr);
 
-        // QR
-        const qrDiv = document.getElementById('qr-hidden'); qrDiv.innerHTML = "";
-        new QRCode(qrDiv, { text: url, width: 400, height: 400, colorDark: "#000" });
-        await new Promise(r => setTimeout(r, 1000));
-        
-        const qrElement = qrDiv.querySelector('canvas') || qrDiv.querySelector('img');
-        if (!qrElement) throw new Error("QR no renderizó");
-        const qrData = qrElement.tagName === 'CANVAS' ? qrElement.toDataURL("image/png") : qrElement.src;
-        doc.addImage(qrData, 'PNG', 70, 40, 70, 70);
+    const top = 127, bottom = com.wa ? 248 : 287;
+    if (content && content.poem) drawPoem(doc, content.poem, top, bottom);
+    else if (content && content.art) drawArt(doc, content.art, top, bottom);
 
-        // URL debajo del QR
-        doc.setFont("courier", "normal"); doc.setFontSize(7);
-        doc.text(url, 105, 114, { align: 'center' });
+    if (com.wa) drawWA(doc, com.wa, com.nombre);
 
-        // Fecha y hora de generación
-        const now = new Date();
-        const genStr = `Generado: ${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-        doc.setFontSize(8);
-        doc.text(genStr, 105, 120, { align: 'center' });
+    const clean = com.nombre.normalize("NFD").replace(/[̀-ͯ]/g, "");
+    doc.save(`Asistencia_${clean}_${dateStr.replace(/\//g, "-")}.pdf`);
 
-        // Separador antes de la obra
-        doc.setLineWidth(0.3); doc.line(40, 126, 170, 126);
-
-        // Arte
-        let artData = null; let finalImgSource = null;
-        const fileInput = document.getElementById('fileInput');
-        const customUrl = document.getElementById('customImgUrl').value;
-        const manualDescription = document.getElementById('customDescription').value.trim();
-
-        if (fileInput.files[0]) {
-            finalImgSource = await getFileData(fileInput.files[0]);
-            artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f", description: "" };
-        } else if (customUrl) {
-            finalImgSource = customUrl;
-            artData = { title: document.getElementById('customTitle').value || "Sin Título", artist: document.getElementById('customArtist').value || "Desconocido", date: document.getElementById('customYear').value || "s/f", description: "" };
-        } else {
-            artData = (Math.random() > 0.5) ? await fetchAIC() : await fetchTheMet();
-            artData.title = await translateTitle(artData.title);
-        }
-        finalImgSource = finalImgSource || artData.img;
-
-        // La descripción manual, si existe, siempre tiene prioridad sobre la del museo
-        const descriptionText = manualDescription || artData.description || "";
-
-        if (finalImgSource) {
-            const processed = await processImg(finalImgSource);
-            if (processed) {
-                // Si hay descripción, dejamos un poco menos de alto a la imagen para que entre el texto
-                const maxH = descriptionText ? 92 : 105;
-                const maxW = 175;
-                let imgH = maxH; let imgW = imgH / processed.ratio;
-                if (imgW > maxW) { imgW = maxW; imgH = imgW * processed.ratio; }
-                const imgY = 130;
-                doc.addImage(processed.data, 'JPEG', (210 - imgW) / 2, imgY, imgW, imgH);
-
-                // Título en negrita y mayúsculas
-                doc.setFont("courier", "bold"); doc.setFontSize(12);
-                doc.text(artData.title.toUpperCase(), 105, imgY + imgH + 9, { align: 'center' });
-
-                // Artista y año en mayúsculas
-                doc.setFont("courier", "normal"); doc.setFontSize(9);
-                doc.text(`ARTISTA: ${artData.artist.toUpperCase()} | AÑO: ${artData.date}`, 105, imgY + imgH + 16, { align: 'center' });
-
-                // Descripción / contexto, debajo del título y artista
-                if (descriptionText) {
-                    doc.setFont("courier", "normal"); doc.setFontSize(8);
-                    const lines = doc.splitTextToSize(descriptionText, 160).slice(0, 4); // máx. 4 líneas
-                    let lineY = imgY + imgH + 23;
-                    lines.forEach(line => {
-                        doc.text(line, 105, lineY, { align: 'center' });
-                        lineY += 4;
-                    });
-                }
-            }
-        }
-
-        const fileName = `ASISTENCIA_${comisionText.split(' ')[0]}_${dateStr.replace(/\//g, '-')}.pdf`;
-        doc.save(fileName);
-    } catch (err) {
-        console.error(err);
-        alert("Error generando PDF. Intenta de nuevo.");
-    } finally {
-        btn.innerText = "Descargar PDF"; btn.disabled = false;
-    }
+    if (content && content.poem) { state.poem = null; loadPoem().catch(() => {}); } // deja listo el siguiente
+    setMsg(warn || "Listo ✓", !!warn);
+  } catch (e) {
+    console.error(e);
+    setMsg("Error: " + e.message, true);
+  } finally {
+    setBusy(false);
+  }
 }
 </script>
-
-<div id="qr-hidden" style="display:none;"></div>
-    <canvas id="temp-canvas" style="display:none;"></canvas>
 </body>
 </html>
