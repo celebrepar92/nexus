@@ -254,7 +254,7 @@ async function fetchPoem() {
   const r = await fetch("/.netlify/functions/poema", { headers: { Authorization: "Bearer " + token } });
   let data = {}; try { data = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(data.error || ("error " + r.status));
-  if (!data.poema) throw new Error("respuesta vacía");
+  if (!data.texto) throw new Error("respuesta vacía");
   return data;
 }
 function loadPoem() {
