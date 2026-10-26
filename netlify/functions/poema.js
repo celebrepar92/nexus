@@ -60,7 +60,8 @@ Reglas: no copies ni parafrasees versos reales del autor; imitá solo su estilo.
 Devolvé exactamente este JSON:
 {"titulo":"título breve del poema","autor":"autor/a que te inspiró","tema":"tema en pocas palabras","poema":"el poema con saltos de línea \\n","comentario":"ver reglas del comentario"}
 
-Reglas del comentario: 2 a 3 oraciones cortas, en PRIMERA PERSONA, como IA, explicando qué quisiste lograr y por qué elegiste ese autor/tema. Tono simple, directo y curioso, con humor seco y deadpan, al estilo de Nathan Fielder pero sin forzarlo: observaciones literales y levemente incómodas, algún detalle muy concreto, cero lenguaje poético o solemne, sin metáforas, sin exclamaciones, sin chistes explicados. Ejemplo de tono (no lo copies): "Elegí a este autor porque el tema era la espera y él parece haber esperado mucho. No sé si lo logré. Lo revisé dos veces y sigue siendo un poema."`;
+Reglas del comentario: 2 a 3 oraciones cortas, en PRIMERA PERSONA, como IA, explicando qué quisiste lograr y por qué elegiste ese autor/tema. Tono simple, directo y curioso, con humor seco y deadpan, al estilo de Nathan Fielder pero sin forzarlo: observaciones literales y levemente incómodas, algún detalle muy concreto, cero lenguaje poético o solemne, sin metáforas, sin exclamaciones, sin chistes explicados. Ejemplo de tono (no lo copies): Elegí a este autor porque el tema era la espera y él parece haber esperado mucho. No sé si lo logré. Lo revisé dos veces y sigue siendo un poema.
+IMPORTANTE: dentro de los valores del JSON no uses comillas dobles (usá comillas simples o « »); los saltos de línea del poema van como \\n.`;
 
   try {
     const r = await fetch("https://api.deepseek.com/chat/completions", {
@@ -74,13 +75,28 @@ Reglas del comentario: 2 a 3 oraciones cortas, en PRIMERA PERSONA, como IA, expl
         ],
         response_format: { type: "json_object" },
         temperature: 1.3,
-        max_tokens: 800,
+        max_tokens: 1200,
       }),
       signal: AbortSignal.timeout(22000),
     });
     if (!r.ok) return json(502, { error: `DeepSeek respondió ${r.status}` });
     const data = await r.json();
-    const out = JSON.parse(data.choices[0].message.content);
+    const raw = data.choices[0].message.content;
+    let out;
+    try {
+      out = JSON.parse(raw);
+    } catch (e) {
+      // Reparación: extrae cada campo aunque haya comillas sueltas o saltos de línea reales
+      const keys = ["titulo", "autor", "tema", "poema", "comentario"];
+      out = {};
+      keys.forEach((k, i) => {
+        const next = keys[i + 1];
+        const re = new RegExp('"' + k + '"\\s*:\\s*"([\\s\\S]*?)"\\s*,?\\s*' + (next ? '"' + next + '"\\s*:' : "\\}\\s*$"));
+        const m = raw.match(re);
+        if (m) out[k] = m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"').trim();
+      });
+      if (!out.poema) throw new Error("respuesta de la IA ilegible, probá de nuevo");
+    }
     return json(200, {
       titulo: out.titulo || "Sin título",
       autor: out.autor || "autor desconocido",
