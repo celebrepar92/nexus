@@ -274,15 +274,15 @@ function loadPoem() {
 function renderPoem() {
   const box = $("poemBox"); box.textContent = "";
   const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "La compañía está ensayando…");
+  if (state.poemP) return add("sk", "La IA está escribiendo la obra…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
-  add("m", "OBRA GENERADA CON IA · " + (p.compania || "El Telón Remendado").toUpperCase() + (p.autor ? " · en el tono de " + p.autor : ""));
+  add("m", "OBRA GENERADA CON IA" + (p.autor ? " · en el tono de " + p.autor : ""));
   add("t", "\u201C" + p.titulo + "\u201D");
   if (p.escena) add("acot", "(" + p.escena + ")");
   p.dialogo.forEach(d => {
     const e = document.createElement("div"); e.className = "l";
-    const w = document.createElement("b"); w.textContent = (d.actor + (d.papel ? " (" + d.papel + ")" : "")).toUpperCase() + ": ";
+    const w = document.createElement("b"); w.textContent = String(d.personaje).toUpperCase() + ": ";
     e.appendChild(w); e.appendChild(document.createTextNode(d.texto)); box.appendChild(e);
   });
   if (p.telon) add("acot", "(" + p.telon + ")");
@@ -440,7 +440,7 @@ function drawPoem(doc, p, top, bottom) {
   const blocks = [];
   if (p.escena) blocks.push(["italic", "(" + safe(p.escena).trim() + ")"]);
   (p.dialogo || []).forEach(d => {
-    const who = safe(d.actor).toUpperCase() + (d.papel ? " (" + safe(d.papel) + ")" : "");
+    const who = safe(d.personaje).toUpperCase();
     blocks.push(["normal", who + ": " + safe(d.texto).trim()]);
   });
   if (p.telon) blocks.push(["italic", "(" + safe(p.telon).trim() + ")"]);
@@ -461,7 +461,7 @@ function drawPoem(doc, p, top, bottom) {
 
   let y = top + 3;
   doc.setFont("courier", "normal"); doc.setFontSize(7);
-  doc.text(safe((p.compania || "El Telón Remendado")).toUpperCase() + " · OBRA EN UN ACTO", 105, y, { align: "center" }); y += 6;
+  doc.text("OBRA EN UN ACTO", 105, y, { align: "center" }); y += 6;
   doc.setFont("courier", "bold"); doc.setFontSize(12);
   doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 160) + "\u201D", 105, y, { align: "center" }); y += 9;
 
