@@ -110,7 +110,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
     <div class="group">
       <label>Contenido de la hoja</label>
       <div class="seg" id="segMode">
-        <button type="button" data-v="poema">Obra de teatro IA</button>
+        <button type="button" data-v="poema">Diálogo filosófico IA</button>
         <button type="button" data-v="azar">Obra al azar</button>
         <button type="button" data-v="propia">Obra propia</button>
         <button type="button" data-v="solo">Solo QR</button>
@@ -118,7 +118,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
 
       <div id="pPoema">
         <div class="poem" id="poemBox"></div>
-        <button class="link" id="poemBtn" type="button">↻ Otra obra</button>
+        <button class="link" id="poemBtn" type="button">↻ Otro diálogo</button>
       </div>
 
       <p class="note hide" id="pAzar">Se elige una pintura de dominio público (Art Institute of Chicago o The Met), en blanco y negro.</p>
@@ -271,14 +271,18 @@ function loadPoem() {
   renderPoem();
   return state.poemP;
 }
+function introText(p) {
+  return `Diálogo filosófico escrito por una inteligencia artificial (${AI_MODEL}) entre Alis y Sombrerín sobre ${p.tema || "la vida"}.`;
+}
 function renderPoem() {
   const box = $("poemBox"); box.textContent = "";
   const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "La IA está escribiendo la obra…");
+  if (state.poemP) return add("sk", "Alis y Sombrerín están conversando…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
-  add("m", "OBRA GENERADA CON IA" + (p.autor ? " · en el tono de " + p.autor : ""));
+  add("m", "DIÁLOGO FILOSÓFICO GENERADO CON IA");
   add("t", "\u201C" + p.titulo + "\u201D");
+  add("acot", introText(p));
   if (p.escena) add("acot", "(" + p.escena + ")");
   p.dialogo.forEach(d => {
     const e = document.createElement("div"); e.className = "l";
@@ -286,7 +290,6 @@ function renderPoem() {
     e.appendChild(w); e.appendChild(document.createTextNode(d.texto)); box.appendChild(e);
   });
   if (p.telon) add("acot", "(" + p.telon + ")");
-  if (p.comentario) add("c", "Comentario de la IA: " + p.comentario);
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -443,13 +446,12 @@ function drawArt(doc, a, top, bottom) {
   dl.forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 4; });
 }
 
-// Obra de teatro: cada intervención va en su propio cuadro (nombre a la izquierda, texto a la derecha).
-// La tipografía se achica hasta que todo entre en el espacio disponible.
+// Diálogo filosófico: cada intervención va en su propio cuadro (nombre a la izquierda, texto a la derecha).
+// Arriba va un breve texto que explica qué es. La tipografía se achica hasta que todo entre en el espacio disponible.
 function drawPoem(doc, p, top, bottom) {
   const X = 15, W = 180, avail = bottom - top;
   const GREYS = [226, 244, 208, 236]; // un gris distinto por personaje (se distingue aunque se imprima en blanco y negro)
-  const note = `Obra escrita por una inteligencia artificial (${AI_MODEL})` + (p.autor ? ` en el tono de ${safe(p.autor)}` : "") + ", generada automáticamente.";
-  const comment = p.comentario ? "Comentario de la IA: " + safe(p.comentario).trim() : "";
+  const intro = safe(introText(p)).trim();
   const escena = p.escena ? "(" + safe(p.escena).trim() + ")" : "";
   const telon = p.telon ? "(" + safe(p.telon).trim() + ")" : "";
   const rows = (p.dialogo || []).map(d => ({ who: safe(d.personaje).toUpperCase().trim(), text: safe(d.texto).trim() }));
@@ -462,6 +464,8 @@ function drawPoem(doc, p, top, bottom) {
   function layout(fs) {
     const lh = fs * .41, nfs = Math.min(fs, 8), padX = 2.2;
     const items = []; let h = HEAD;
+    F("italic", fs); const il = doc.splitTextToSize(intro, W - 7);
+    items.push({ k: "intro", l: il, h: boxH(il.length, fs, lh) });
     if (escena) { F("italic", fs); const l = doc.splitTextToSize(escena, W - 7); items.push({ k: "acot", l, h: boxH(l.length, fs, lh) }); }
     F("bold", nfs);
     const nw = Math.max(...order.map(n => doc.getTextWidth(n)), 0);
@@ -473,20 +477,16 @@ function drawPoem(doc, p, top, bottom) {
     });
     if (telon) { F("italic", fs); const l = doc.splitTextToSize(telon, W - 7); items.push({ k: "telon", l, h: boxH(l.length, fs, lh) }); }
     items.forEach(it => { h += it.h + gap; });
-    F("italic", 7.5); const cl = comment ? doc.splitTextToSize(comment, W - 7) : [];
-    const clh = 7.5 * .41, cH = cl.length ? boxH(cl.length, 7.5, clh) : 0;
-    F("italic", 6.5); const nl2 = doc.splitTextToSize(note, W);
-    h += (cH ? cH + gap : 0) + 2.5 + nl2.length * 2.7;
-    return { fs, lh, nfs, padX, nameW, items, cl, clh, cH, nl2, h };
+    return { fs, lh, nfs, padX, nameW, items, h };
   }
 
   let L;
-  for (const size of [9.5, 9, 8.5, 8, 7.5, 7, 6.5]) { L = layout(size); if (L.h <= avail) break; }
+  for (const size of [10, 9.5, 9, 8.5, 8, 7.5, 7, 6.5]) { L = layout(size); if (L.h <= avail) break; }
 
   // Título
   doc.setTextColor(0);
   doc.setFont("courier", "normal"); doc.setFontSize(6.5);
-  doc.text("OBRA EN UN ACTO", 105, top + 3.5, { align: "center" });
+  doc.text("DIÁLOGO FILOSÓFICO", 105, top + 3.5, { align: "center" });
   doc.setFont("courier", "bold"); doc.setFontSize(11.5);
   doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 170) + "\u201D", 105, top + 10, { align: "center" });
 
@@ -504,6 +504,12 @@ function drawPoem(doc, p, top, bottom) {
       it.nl.forEach((l, i) => doc.text(l, X + L.padX, base + i * L.lh));
       doc.setTextColor(20); F("normal", L.fs);
       it.tl.forEach((l, i) => doc.text(l, X + L.nameW + L.padX, base + i * L.lh));
+    } else if (it.k === "intro") {
+      doc.setDrawColor(90); doc.setLineDashPattern([1.2, 1], 0);
+      doc.roundedRect(X, y, W, it.h, 1.2, 1.2, "S"); doc.setLineDashPattern([], 0);
+      doc.setTextColor(40); F("italic", L.fs);
+      const base = y + padY + L.fs * .28;
+      it.l.forEach((l, i) => doc.text(l, X + 3.5, base + i * L.lh));
     } else {
       doc.setFillColor(247, 247, 247); doc.roundedRect(X, y, W, it.h, 1, 1, "F");
       doc.setTextColor(50); F("italic", L.fs);
@@ -512,18 +518,6 @@ function drawPoem(doc, p, top, bottom) {
     }
     y += it.h + gap;
   });
-
-  // Comentario de la IA (cuadro punteado) y nota al pie
-  if (L.cH) {
-    doc.setDrawColor(90); doc.setLineDashPattern([1.2, 1], 0);
-    doc.roundedRect(X, y, W, L.cH, 1.2, 1.2, "S"); doc.setLineDashPattern([], 0);
-    doc.setTextColor(40); F("italic", 7.5);
-    const base = y + padY + 7.5 * .28;
-    L.cl.forEach((l, i) => doc.text(l, X + 3.5, base + i * L.clh));
-    y += L.cH + gap;
-  }
-  doc.setTextColor(90); F("italic", 6.5);
-  L.nl2.forEach((l, i) => doc.text(l, X, y + 2.4 + i * 2.7));
   doc.setTextColor(0);
 }
 // ==PDF-END==

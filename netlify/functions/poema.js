@@ -1,9 +1,10 @@
-// Función serverless: genera una obra de teatro breve y clara (un microrrelato en formato de guion), con DeepSeek.
-// Los personajes los inventa la IA en cada obra. El tono imita a un dramaturgo sorteado al azar,
-// y al final la IA agrega un breve comentario propio.
+// Función serverless: genera un diálogo filosófico breve con DeepSeek.
+// Siempre conversan los mismos dos personajes, inspirados en "Alicia en el país de las maravillas":
+// ALIS (la curiosa, que razona en serio) y SOMBRERÍN (el excéntrico, de lógica disparatada pero a veces lúcida).
+// El tema, los filósofos para citar y el disparate lógico se sortean acá, en código, para que cada diálogo sea distinto.
 // La API key vive SOLO en la variable de entorno DEEPSEEK_API_KEY (Netlify > Site settings > Environment variables).
 // Solo responde a usuarios logueados con Netlify Identity.
-// Devuelve: { titulo, escena, dialogo:[{personaje,texto}], telon, comentario, autor }
+// Devuelve: { titulo, escena, dialogo:[{personaje,texto}], telon, tema }
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -12,34 +13,42 @@ const json = (statusCode, body) => ({
 });
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
+const pickN = (a, n) => [...a].sort(() => Math.random() - 0.5).slice(0, n);
 
-// Se sortea acá, en código, para que cada obra sea distinta. Pocas semillas y simples, para que la obra se entienda.
-const AUTORES = [
-  "William Shakespeare", "Antón Chéjov", "Molière", "Oscar Wilde", "George Bernard Shaw", "Arthur Miller",
-  "Tennessee Williams", "Armando Discépolo", "Roberto Cossa", "Federico García Lorca", "Henrik Ibsen", "Neil Simon",
-  "Ricardo Talesnik", "Alejandro Casona", "Friedrich Dürrenmatt", "Lope de Vega", "Sófocles", "Aristófanes",
-  "Eugene O'Neill", "Bertolt Brecht", "Mauricio Kartun", "Dario Fo", "Edmond Rostand", "Carlo Goldoni",
+const TEMAS = [
+  "el libre albedrío", "el tiempo", "la identidad", "la verdad", "el sentido de la vida", "la libertad", "la justicia",
+  "la muerte", "la belleza", "el azar y el destino", "la felicidad", "el conocimiento y la duda", "el lenguaje y las palabras",
+  "la memoria", "el bien y el mal", "la amistad", "el infinito", "la realidad y los sueños", "el poder", "la soledad",
+  "el arte", "la mentira", "la responsabilidad", "el miedo", "la curiosidad", "las reglas y las leyes", "el valor del dinero",
+  "la contradicción y la paradoja", "el cambio", "la nada", "el humor y la risa", "la tecnología y la inteligencia artificial",
+  "el éxito", "el aburrimiento", "la imaginación", "la fama", "la obediencia", "el silencio",
 ];
-const GENEROS = [
-  "comedia", "drama íntimo", "tragedia breve", "comedia romántica", "sainete rioplatense", "fábula",
-  "suspenso", "drama familiar", "humor negro suave", "comedia de enredos",
+const FILOSOFOS = [
+  "Sócrates", "Platón", "Aristóteles", "Heráclito", "Parménides", "Epicuro", "Séneca", "Marco Aurelio", "Montaigne",
+  "Descartes", "Spinoza", "Pascal", "Hume", "Kant", "Schopenhauer", "Kierkegaard", "Nietzsche", "Simone de Beauvoir",
+  "Sartre", "Camus", "Hannah Arendt", "Wittgenstein", "Bertrand Russell", "Zhuangzi", "Lao Tse", "Confucio",
 ];
-const ESCENARIOS = [
-  "una sala de espera", "una cocina a medianoche", "una pensión", "un bar a la hora de cierre", "una plaza un domingo",
-  "un consultorio", "una estación de tren", "un taller", "un cumpleaños", "una peluquería", "una oficina",
-  "una terraza", "un velorio", "un tribunal chico", "una casa que se vende", "un hospital de noche",
-];
-const SITUACIONES = [
-  "alguien tiene que contar una verdad difícil", "dos viejos amigos se reencuentran después de años", "una promesa que cuesta cumplir",
-  "una mentira chica que se vuelve enorme", "una despedida que nadie quiere hacer", "una decisión que no se puede postergar más",
-  "un malentendido que se aclara demasiado tarde", "una oferta inesperada que cambia todo", "un secreto de familia sale a la luz",
-  "alguien pide perdón y no sabe cómo", "dos personas se disputan algo que ninguna quiere de verdad", "un desconocido trae una noticia",
-  "alguien descubre algo sobre sí mismo", "una deuda vieja que hay que saldar", "un regreso que nadie esperaba",
+const DISPARATES = [
+  "siempre es la hora del té, porque Sombrerín jura que el reloj se quedó trabado y no hay forma de destrabarlo",
+  "Sombrerín propone medir la verdad con una cinta métrica y tiene un método muy serio para hacerlo",
+  "Sombrerín sostiene que una palabra significa lo que él decide que signifique, y lo defiende con lógica impecable",
+  "Sombrerín plantea un acertijo que no tiene respuesta y se ofende si alguien intenta resolverlo",
+  "Sombrerín insiste en que, si algo no se mira, no tiene por qué seguir ahí, y actúa en consecuencia",
+  "Sombrerín quiere repartir el té en partes iguales, pero cada vez que cuenta las tazas le salen más o menos",
+  "Sombrerín demuestra con un razonamiento perfecto una conclusión absurda, y Alis no encuentra el error",
+  "Sombrerín responde cada pregunta con otra pregunta, pero cada pregunta lleva a una verdad más cerca",
+  "Sombrerín habla de su sombrero como si fuera una persona con opiniones propias",
+  "Sombrerín propone una votación para decidir si la respuesta es sí o no, y los únicos votantes son ellos dos y una tetera",
+  "Sombrerín asegura que el tiempo se enojó con él y ya no le habla, y lo cuenta con total naturalidad",
+  "Sombrerín cambia de lugar en la mesa cada vez que la conversación se pone seria",
 ];
 const FINALES = [
-  "un giro inesperado pero coherente", "una frase que cambia el sentido de todo", "un cierre irónico", "un final tierno",
-  "un final seco y contundente", "una revelación sencilla", "un final abierto pero comprensible",
+  "una pregunta que queda flotando", "un acuerdo disparatado pero lógico", "una frase simple que resume todo",
+  "un giro en el que Alis le gana a Sombrerín con un argumento", "un giro en el que Sombrerín dice algo sorprendentemente sabio",
+  "los dos coinciden sin darse cuenta", "un cierre que vuelve al principio del diálogo",
 ];
+
+const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
 
 exports.handler = async (event, context) => {
   const user = context.clientContext && context.clientContext.user;
@@ -50,29 +59,32 @@ exports.handler = async (event, context) => {
 
   const semilla = Math.random().toString(36).slice(2, 8);
   const s = {
-    autor: pick(AUTORES), genero: pick(GENEROS), escenario: pick(ESCENARIOS),
-    situacion: pick(SITUACIONES), final: pick(FINALES),
+    tema: pick(TEMAS), filosofos: pickN(FILOSOFOS, 2), disparate: pick(DISPARATES), final: pick(FINALES),
   };
 
   const system =
-    "Sos un dramaturgo que escribe obras breves, claras y bien construidas. Tus diálogos son naturales, con subtexto, y cualquier lector entiende la historia a la primera lectura. Sabés capturar el tono de otros dramaturgos sin copiarlos. Respondés SIEMPRE con un único objeto JSON válido, sin texto extra, con las comillas dobles internas correctamente escapadas.";
+    "Sos un escritor de diálogos filosóficos para el gran público: claros, humanos, con humor y con ideas de verdad. Sabés explicar cosas complejas con palabras simples y con un toque de absurdo lógico al estilo de Lewis Carroll. Respondés SIEMPRE con un único objeto JSON válido, sin texto extra, con las comillas dobles internas correctamente escapadas.";
 
-  const user_prompt = `Escribí una obra de teatro breve (un microrrelato en formato de guion, un solo acto y una sola escena), en español, original, entretenida y muy bien escrita, de entre 150 y 200 palabras en total (escena inicial, diálogo y telón).
+  const user_prompt = `Escribí un diálogo filosófico breve entre dos personajes fijos, en español, de entre 200 y 260 palabras en total (escena inicial, diálogo y telón).
 
-CLARIDAD (lo más importante): que se entienda a la primera lectura. Una sola situación, un conflicto claro y un cierre que se comprenda. Entre 2 y 3 personajes que vos inventás, con nombres propios simples, cada uno con una voz distinta y un deseo claro. Lenguaje cotidiano, frases cortas. Nada de absurdo, surrealismo ni confusión, salvo que el género lo pida de forma sutil. Los hechos tienen que tener lógica de principio a fin.
+LOS PERSONAJES (siempre son estos dos, inspirados en "Alicia en el país de las maravillas"; no inventes otros):
+- ALIS: joven, curiosa y seria. Razona de verdad, hace preguntas simples que desarman las ideas grandes y se molesta con las contradicciones. A veces le sale una sabiduría inesperada.
+- SOMBRERÍN: excéntrico, sociable, siempre en medio de un té que no termina. Razona con lógica impecable a partir de ideas disparatadas, hace juegos de palabras y acertijos, da vueltas, pero de vez en cuando suelta una verdad profunda sin darse cuenta. Cita a filósofos con mucha seguridad.
 
-TONO: ${s.autor}. Escribí en su estilo: su manera de armar un diálogo, su ritmo y su forma de cerrar. Es un homenaje al estilo, no una copia: nada de frases, escenas ni personajes reales de ese autor, y no lo nombres dentro de la obra.
+TEMA SORTEADO: ${s.tema}. Que conversen sobre ese asunto complejo con lenguaje simple y cotidiano, como si se lo explicaran a un amigo: palabras sencillas, frases cortas, nada de jerga académica. Que haya ideas de verdad, no solo chistes, y que el diálogo avance (cada intervención aporta algo nuevo, nada de repetir).
 
-SEMILLAS SORTEADAS (usalas como base y adaptalas con libertad): género ${s.genero}; escenario ${s.escenario}; situación: ${s.situacion}; final con ${s.final}.
+FILÓSOFOS: de vez en cuando (una o dos veces en todo el diálogo, no más) uno de los dos cita o menciona una idea de un filósofo real. Sugeridos para esta ejecución: ${s.filosofos.join(" y ")}; si no encajan con el tema, usá otro filósofo real. MUY IMPORTANTE: citá ideas reales y conocidas, bien atribuidas; si no estás seguro de una frase textual, parafraseá la idea ("como decía Heráclito, todo fluye"). Nunca inventes una cita ni se la atribuyas a quien no corresponde.
 
-CALIDAD: que arranque con algo que atrape y cierre con una última línea que quede resonando. Diálogos cortos y filosos, con subtexto. Imágenes concretas, cero relleno, nada de moraleja explícita. Evitá los clichés. Sin emojis ni palabras en otros idiomas. Variedad: semilla de esta ejecución, ${semilla}; no uses nombres ni títulos comunes.
+TOQUE DISPARATADO: el diálogo tiene también algunas partes medio ridículas, pero con lógica interna, como el Sombrerero de Alicia: razonamientos absurdos que siguen sus propias reglas y que, de rebote, tocan el tema. Disparate sorteado para esta ejecución (adaptalo con libertad): ${s.disparate}. Lo ridículo ocupa una parte del diálogo, no todo: el resto es una conversación filosófica genuina.
 
-FORMATO: "escena" es una acotación inicial breve (1 o 2 oraciones) con el lugar y la situación, en presente. "dialogo" es una lista de entre 8 y 14 intervenciones, cada una con "personaje" (nombre del personaje, igual en todas sus intervenciones) y "texto" (lo que dice; puede incluir acotaciones breves entre corchetes, como [se sienta]). "telon" es una acotación final breve (una oración). El "titulo" es corto (hasta 6 palabras), sugerente, sin comillas y sin el nombre del dramaturgo.
+FINAL: ${s.final}.
 
-COMENTARIO DE LA IA: debajo de la obra, escribí en primera persona un breve comentario tuyo, como el dramaturgo que acaba de escribirla (2 o 3 oraciones, máximo 45 palabras): qué intentaste hacer con el tono de ${s.autor}, qué decisión tomaste o qué te costó o te divirtió. Honesto, con un toque de humor seco o de humildad, sin autoelogios y sin spoilear el final. Sin comillas ni saludos.
+CALIDAD: que arranque con algo que atrape y cierre con una última línea que quede resonando. Diálogos cortos y vivos, cada personaje con su voz. Imágenes concretas, cero relleno, nada de moraleja explícita ni de explicar el chiste. Sin emojis ni palabras en otros idiomas. Variedad: semilla de esta ejecución, ${semilla}.
+
+FORMATO: "titulo" corto (hasta 6 palabras), sugerente, sin comillas. "escena" es una acotación inicial breve (1 oración, en presente) con el lugar y la situación. "dialogo" es una lista de entre 12 y 16 intervenciones, cada una con "personaje" (exactamente ALIS o SOMBRERÍN) y "texto" (lo que dice; puede incluir acotaciones breves entre corchetes, como [sirve té]). "telon" es una acotación final breve (una oración). No agregues explicaciones, comentarios ni notas por fuera de esos campos.
 
 Devolvé exactamente este JSON:
-{"titulo":"el título","escena":"la acotación inicial","dialogo":[{"personaje":"NOMBRE","texto":"..."}],"telon":"la acotación final","comentario":"el comentario de la IA"}`;
+{"titulo":"el título","escena":"la acotación inicial","dialogo":[{"personaje":"ALIS","texto":"..."}],"telon":"la acotación final"}`;
 
   try {
     const r = await fetch("https://api.deepseek.com/chat/completions", {
@@ -85,10 +97,10 @@ Devolvé exactamente este JSON:
           { role: "user", content: user_prompt },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.95,
+        temperature: 1.05,
         top_p: 0.95,
         presence_penalty: 0.3,
-        max_tokens: 1600,
+        max_tokens: 1800,
       }),
       signal: AbortSignal.timeout(22000),
     });
@@ -102,23 +114,24 @@ Devolvé exactamente este JSON:
       throw new Error("respuesta de la IA ilegible, probá de nuevo");
     }
 
+    // Solo los dos personajes fijos
     const dialogo = (Array.isArray(out.dialogo) ? out.dialogo : [])
-      .map((d) => ({
-        personaje: String((d && (d.personaje || d.actor)) || "").trim(),
-        texto: String((d && d.texto) || "").trim(),
-      }))
+      .map((d) => {
+        const n = norm(d && (d.personaje || d.actor));
+        const personaje = n.startsWith("ALIS") ? "ALIS" : n.startsWith("SOMBRER") ? "SOMBRERÍN" : "";
+        return { personaje, texto: String((d && d.texto) || "").trim() };
+      })
       .filter((d) => d.personaje && d.texto);
-    if (dialogo.length < 3) throw new Error("la obra salió incompleta, probá de nuevo");
+    if (dialogo.length < 4) throw new Error("el diálogo salió incompleto, probá de nuevo");
 
     return json(200, {
       titulo: String(out.titulo || "Sin título").replace(/^["“”]+|["“”]+$/g, "").trim(),
       escena: String(out.escena || "").trim(),
       dialogo,
       telon: String(out.telon || "").trim(),
-      comentario: String(out.comentario || "").trim(),
-      autor: s.autor,
+      tema: s.tema,
     });
   } catch (e) {
-    return json(500, { error: "No se pudo generar la obra (" + (e.name === "TimeoutError" ? "tiempo agotado" : e.message) + ")" });
+    return json(500, { error: "No se pudo generar el diálogo (" + (e.name === "TimeoutError" ? "tiempo agotado" : e.message) + ")" });
   }
 };
