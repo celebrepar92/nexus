@@ -399,6 +399,19 @@ function drawAttendanceQR(doc, url, genStr) {
   doc.setLineWidth(.3); doc.line(40, 122, 170, 122);
 }
 
+// Versión compacta: QR a la izquierda y texto a la derecha, para dejar más lugar al contenido
+function drawAttendanceQRCompact(doc, url, genStr) {
+  drawQR(doc, url, 15, 36, 50);
+  doc.setTextColor(0);
+  doc.setFont("courier", "bold"); doc.setFontSize(12);
+  doc.text("ESCANEÁ EL QR PARA", 72, 53);
+  doc.text("REGISTRAR TU ASISTENCIA", 72, 59);
+  doc.setFont("courier", "normal"); doc.setFontSize(7.5);
+  doc.text(doc.splitTextToSize(url, 120), 72, 67);
+  doc.text(genStr, 72, 73);
+  doc.setLineWidth(.3); doc.line(15, 89, 195, 89);
+}
+
 function drawWA(doc, url, comNombre) {
   doc.setLineWidth(.3); doc.line(15, 251, 195, 251);
   drawQR(doc, url, 15, 254, 32);
@@ -430,52 +443,88 @@ function drawArt(doc, a, top, bottom) {
   dl.forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 4; });
 }
 
-// Obra de teatro: se achica la tipografía hasta que todo entre en el espacio disponible
+// Obra de teatro: cada intervención va en su propio cuadro (nombre a la izquierda, texto a la derecha).
+// La tipografía se achica hasta que todo entre en el espacio disponible.
 function drawPoem(doc, p, top, bottom) {
-  const X = 28, W = 154, avail = bottom - top;
+  const X = 15, W = 180, avail = bottom - top;
+  const GREYS = [226, 244, 208, 236]; // un gris distinto por personaje (se distingue aunque se imprima en blanco y negro)
   const note = `Obra escrita por una inteligencia artificial (${AI_MODEL})` + (p.autor ? ` en el tono de ${safe(p.autor)}` : "") + ", generada automáticamente.";
   const comment = p.comentario ? "Comentario de la IA: " + safe(p.comentario).trim() : "";
+  const escena = p.escena ? "(" + safe(p.escena).trim() + ")" : "";
+  const telon = p.telon ? "(" + safe(p.telon).trim() + ")" : "";
+  const rows = (p.dialogo || []).map(d => ({ who: safe(d.personaje).toUpperCase().trim(), text: safe(d.texto).trim() }));
+  const order = []; rows.forEach(r => { if (!order.includes(r.who)) order.push(r.who); });
 
-  // Bloques [estilo, texto]: acotaciones en cursiva, diálogos en normal
-  const blocks = [];
-  if (p.escena) blocks.push(["italic", "(" + safe(p.escena).trim() + ")"]);
-  (p.dialogo || []).forEach(d => {
-    const who = safe(d.personaje).toUpperCase();
-    blocks.push(["normal", who + ": " + safe(d.texto).trim()]);
-  });
-  if (p.telon) blocks.push(["italic", "(" + safe(p.telon).trim() + ")"]);
+  const F = (st, size) => { doc.setFont("helvetica", st); doc.setFontSize(size); };
+  const padY = 1.5, gap = 1.3, HEAD = 14;
+  const boxH = (n, size, lh) => padY + size * .28 + (n - 1) * lh + padY + size * .07;
 
-  let fs = 10, lines, nL, cL, lh;
-  for (const size of [10, 9.5, 9, 8.5, 8, 7.5, 7]) {
-    fs = size; lh = size * .47; lines = [];
-    blocks.forEach(([st, t]) => {
-      doc.setFont("courier", st); doc.setFontSize(size);
-      doc.splitTextToSize(t, W).forEach(l => lines.push([st, l]));
-      lines.push(null); // espacio entre intervenciones
+  function layout(fs) {
+    const lh = fs * .41, nfs = Math.min(fs, 8), padX = 2.2;
+    const items = []; let h = HEAD;
+    if (escena) { F("italic", fs); const l = doc.splitTextToSize(escena, W - 7); items.push({ k: "acot", l, h: boxH(l.length, fs, lh) }); }
+    F("bold", nfs);
+    const nw = Math.max(...order.map(n => doc.getTextWidth(n)), 0);
+    const nameW = Math.min(Math.max(nw + 2 * padX, 15), 36);
+    rows.forEach(r => {
+      F("bold", nfs); const nl = doc.splitTextToSize(r.who, nameW - 2 * padX);
+      F("normal", fs); const tl = doc.splitTextToSize(r.text, W - nameW - 2 * padX);
+      items.push({ k: "row", r, nl, tl, h: boxH(Math.max(nl.length, tl.length), fs, lh) });
     });
-    doc.setFont("courier", "italic"); doc.setFontSize(8);
-    nL = doc.splitTextToSize(note, W); cL = comment ? doc.splitTextToSize(comment, W).slice(0, 8) : [];
-    const h = lines.reduce((s, l) => s + (l === null ? lh * .5 : lh), 0);
-    if (18 + h + 5 + (nL.length + cL.length) * 3.8 + 2 <= avail) break;
+    if (telon) { F("italic", fs); const l = doc.splitTextToSize(telon, W - 7); items.push({ k: "telon", l, h: boxH(l.length, fs, lh) }); }
+    items.forEach(it => { h += it.h + gap; });
+    F("italic", 7.5); const cl = comment ? doc.splitTextToSize(comment, W - 7) : [];
+    const clh = 7.5 * .41, cH = cl.length ? boxH(cl.length, 7.5, clh) : 0;
+    F("italic", 6.5); const nl2 = doc.splitTextToSize(note, W);
+    h += (cH ? cH + gap : 0) + 2.5 + nl2.length * 2.7;
+    return { fs, lh, nfs, padX, nameW, items, cl, clh, cH, nl2, h };
   }
 
-  let y = top + 3;
-  doc.setFont("courier", "normal"); doc.setFontSize(7);
-  doc.text("OBRA EN UN ACTO", 105, y, { align: "center" }); y += 6;
-  doc.setFont("courier", "bold"); doc.setFontSize(12);
-  doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 160) + "\u201D", 105, y, { align: "center" }); y += 9;
+  let L;
+  for (const size of [9.5, 9, 8.5, 8, 7.5, 7, 6.5]) { L = layout(size); if (L.h <= avail) break; }
 
-  doc.setFontSize(fs);
-  lines.forEach(l => {
-    if (l === null) { y += lh * .5; return; }
-    doc.setFont("courier", l[0]); doc.setFontSize(fs);
-    doc.text(l[1], X, y); y += lh;
+  // Título
+  doc.setTextColor(0);
+  doc.setFont("courier", "normal"); doc.setFontSize(6.5);
+  doc.text("OBRA EN UN ACTO", 105, top + 3.5, { align: "center" });
+  doc.setFont("courier", "bold"); doc.setFontSize(11.5);
+  doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 170) + "\u201D", 105, top + 10, { align: "center" });
+
+  let y = top + HEAD;
+  doc.setLineWidth(.25);
+  L.items.forEach(it => {
+    if (it.k === "row") {
+      const g = GREYS[order.indexOf(it.r.who) % GREYS.length];
+      doc.setFillColor(g, g, g); doc.roundedRect(X, y, W, it.h, 1.2, 1.2, "F");
+      doc.setFillColor(255, 255, 255); doc.rect(X + L.nameW, y, W - L.nameW, it.h, "F");
+      doc.setDrawColor(90); doc.roundedRect(X, y, W, it.h, 1.2, 1.2, "S");
+      doc.setDrawColor(150); doc.line(X + L.nameW, y + .6, X + L.nameW, y + it.h - .6);
+      const base = y + padY + L.fs * .28;
+      doc.setTextColor(0); F("bold", L.nfs);
+      it.nl.forEach((l, i) => doc.text(l, X + L.padX, base + i * L.lh));
+      doc.setTextColor(20); F("normal", L.fs);
+      it.tl.forEach((l, i) => doc.text(l, X + L.nameW + L.padX, base + i * L.lh));
+    } else {
+      doc.setFillColor(247, 247, 247); doc.roundedRect(X, y, W, it.h, 1, 1, "F");
+      doc.setTextColor(50); F("italic", L.fs);
+      const base = y + padY + L.fs * .28;
+      it.l.forEach((l, i) => it.k === "telon" ? doc.text(l, 105, base + i * L.lh, { align: "center" }) : doc.text(l, X + 3.5, base + i * L.lh));
+    }
+    y += it.h + gap;
   });
 
-  y += 1; doc.setLineWidth(.2); doc.line(X, y, X + W, y); y += 5;
-  doc.setFont("courier", "italic"); doc.setFontSize(8);
-  nL.forEach(l => { doc.text(l, X, y); y += 3.8; }); y += 2;
-  cL.forEach(l => { doc.text(l, X, y); y += 3.8; });
+  // Comentario de la IA (cuadro punteado) y nota al pie
+  if (L.cH) {
+    doc.setDrawColor(90); doc.setLineDashPattern([1.2, 1], 0);
+    doc.roundedRect(X, y, W, L.cH, 1.2, 1.2, "S"); doc.setLineDashPattern([], 0);
+    doc.setTextColor(40); F("italic", 7.5);
+    const base = y + padY + 7.5 * .28;
+    L.cl.forEach((l, i) => doc.text(l, X + 3.5, base + i * L.clh));
+    y += L.cH + gap;
+  }
+  doc.setTextColor(90); F("italic", 6.5);
+  L.nl2.forEach((l, i) => doc.text(l, X, y + 2.4 + i * 2.7));
+  doc.setTextColor(0);
 }
 // ==PDF-END==
 
@@ -509,9 +558,10 @@ async function generatePDF() {
     const genStr = `Generado: ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     drawHeader(doc, com.nombre, dateStr);
-    drawAttendanceQR(doc, com.url, genStr);
+    const compact = !!(content && content.poem);
+    if (compact) drawAttendanceQRCompact(doc, com.url, genStr); else drawAttendanceQR(doc, com.url, genStr);
 
-    const top = 127, bottom = com.wa ? 248 : 287;
+    const top = compact ? 93 : 127, bottom = com.wa ? 248 : 287;
     if (content && content.poem) drawPoem(doc, content.poem, top, bottom);
     else if (content && content.art) drawArt(doc, content.art, top, bottom);
 
