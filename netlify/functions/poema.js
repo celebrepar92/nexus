@@ -58,7 +58,9 @@ ${headlines.length ? headlines.map((h) => "- " + h).join("\n") : "(no disponible
 
 Reglas: no copies ni parafrasees versos reales del autor; imitá solo su estilo. Sin emojis. Usá comillas rectas. Versos cortos: máximo 45 caracteres cada uno.
 Devolvé exactamente este JSON:
-{"titulo":"título breve del poema","autor":"autor/a que te inspiró","tema":"tema en pocas palabras","poema":"el poema con saltos de línea \\n","comentario":"2 a 4 oraciones en PRIMERA PERSONA, como IA, explicando brevemente qué quisiste lograr con el poema y por qué elegiste ese autor/tema"}`;
+{"titulo":"título breve del poema","autor":"autor/a que te inspiró","tema":"tema en pocas palabras","poema":"el poema con saltos de línea \\n","comentario":"ver reglas del comentario"}
+
+Reglas del comentario: 2 a 3 oraciones cortas, en PRIMERA PERSONA, como IA, explicando qué quisiste lograr y por qué elegiste ese autor/tema. Tono simple, directo y curioso, con humor seco y deadpan, al estilo de Nathan Fielder pero sin forzarlo: observaciones literales y levemente incómodas, algún detalle muy concreto, cero lenguaje poético o solemne, sin metáforas, sin exclamaciones, sin chistes explicados. Ejemplo de tono (no lo copies): "Elegí a este autor porque el tema era la espera y él parece haber esperado mucho. No sé si lo logré. Lo revisé dos veces y sigue siendo un poema."`;
 
   try {
     const r = await fetch("https://api.deepseek.com/chat/completions", {
