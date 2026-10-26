@@ -1,10 +1,10 @@
-// Función serverless: genera un diálogo filosófico breve con DeepSeek.
-// Siempre conversan los mismos dos personajes, inspirados en "Alicia en el país de las maravillas":
-// ALIS (la curiosa, que razona en serio) y SOMBRERÍN (el excéntrico, de lógica disparatada pero a veces lúcida).
-// El tema, los filósofos para citar y el disparate lógico se sortean acá, en código, para que cada diálogo sea distinto.
+// Función serverless: genera un diálogo filosófico breve con DeepSeek (solo diálogo, sin formato de obra).
+// Siempre conversan los mismos dos personajes, de nombres parecidos y personalidades contrastantes:
+// DUDO (el escéptico, cuidadoso, que lo cuestiona todo) y DADO (el impulsivo, ocurrente, de lógica disparatada).
+// El tema, quién arranca, los filósofos para citar y el disparate lógico se sortean acá, en código, para que cada diálogo sea distinto.
 // La API key vive SOLO en la variable de entorno DEEPSEEK_API_KEY (Netlify > Site settings > Environment variables).
 // Solo responde a usuarios logueados con Netlify Identity.
-// Devuelve: { titulo, escena, dialogo:[{personaje,texto}], telon, tema }
+// Devuelve: { dialogo:[{personaje,texto}], tema }
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -28,27 +28,37 @@ const FILOSOFOS = [
   "Descartes", "Spinoza", "Pascal", "Hume", "Kant", "Schopenhauer", "Kierkegaard", "Nietzsche", "Simone de Beauvoir",
   "Sartre", "Camus", "Hannah Arendt", "Wittgenstein", "Bertrand Russell", "Zhuangzi", "Lao Tse", "Confucio",
 ];
+// Disparates con lógica interna, en el espíritu de Lewis Carroll pero propios (nada de té, sombreros, relojes ni reinas).
 const DISPARATES = [
-  "siempre es la hora del té, porque Sombrerín jura que el reloj se quedó trabado y no hay forma de destrabarlo",
-  "Sombrerín propone medir la verdad con una cinta métrica y tiene un método muy serio para hacerlo",
-  "Sombrerín sostiene que una palabra significa lo que él decide que signifique, y lo defiende con lógica impecable",
-  "Sombrerín plantea un acertijo que no tiene respuesta y se ofende si alguien intenta resolverlo",
-  "Sombrerín insiste en que, si algo no se mira, no tiene por qué seguir ahí, y actúa en consecuencia",
-  "Sombrerín quiere repartir el té en partes iguales, pero cada vez que cuenta las tazas le salen más o menos",
-  "Sombrerín demuestra con un razonamiento perfecto una conclusión absurda, y Alis no encuentra el error",
-  "Sombrerín responde cada pregunta con otra pregunta, pero cada pregunta lleva a una verdad más cerca",
-  "Sombrerín habla de su sombrero como si fuera una persona con opiniones propias",
-  "Sombrerín propone una votación para decidir si la respuesta es sí o no, y los únicos votantes son ellos dos y una tetera",
-  "Sombrerín asegura que el tiempo se enojó con él y ya no le habla, y lo cuenta con total naturalidad",
-  "Sombrerín cambia de lugar en la mesa cada vez que la conversación se pone seria",
+  "Dado propone medir la verdad con una cinta métrica y tiene un método muy serio para hacerlo",
+  "Dado jura que si cierra los ojos el problema se achica, y lo demuestra con un razonamiento que Dudo no puede rebatir",
+  "Dado quiere resolver el asunto con una votación, pero los únicos votantes son ellos dos y una silla",
+  "Dado sostiene que una idea se le perdió en algún bolsillo y se pone a buscarla con total seriedad",
+  "Dado plantea un acertijo que no tiene respuesta y se ofende si alguien intenta resolverlo",
+  "Dado demuestra con una lógica impecable una conclusión absurda, y Dudo no encuentra el error",
+  "Dado responde cada pregunta con otra pregunta, pero cada pregunta lo acerca más a una verdad",
+  "Dado asegura que el tiempo es un animal que hay que alimentar para que no se escape",
+  "Dado propone firmar un contrato con la luna para zanjar la discusión, y detalla las cláusulas",
+  "Dado afirma que las preguntas difíciles se resuelven dándoles la vuelta, y las da vuelta literalmente",
+  "Dado cuenta cuántas cosas hay en la conversación y cada vez le da un número distinto, siempre con razones",
+  "Dado inventa una palabra nueva para el asunto y se pone a defender su definición como si fuera de diccionario",
 ];
 const FINALES = [
   "una pregunta que queda flotando", "un acuerdo disparatado pero lógico", "una frase simple que resume todo",
-  "un giro en el que Alis le gana a Sombrerín con un argumento", "un giro en el que Sombrerín dice algo sorprendentemente sabio",
-  "los dos coinciden sin darse cuenta", "un cierre que vuelve al principio del diálogo",
+  "un giro en el que Dudo termina convencido por la lógica de Dado", "un giro en el que Dado dice algo sorprendentemente sabio",
+  "los dos coinciden sin darse cuenta", "un cierre que vuelve a la primera frase del diálogo",
 ];
 
 const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+// Sin corchetes, paréntesis ni acciones entre asteriscos: solo lo que dicen
+const limpiar = (t) =>
+  String(t || "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\*[^*]*\*/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .trim();
 
 exports.handler = async (event, context) => {
   const user = context.clientContext && context.clientContext.user;
@@ -60,31 +70,35 @@ exports.handler = async (event, context) => {
   const semilla = Math.random().toString(36).slice(2, 8);
   const s = {
     tema: pick(TEMAS), filosofos: pickN(FILOSOFOS, 2), disparate: pick(DISPARATES), final: pick(FINALES),
+    arranca: pick(["DUDO", "DADO"]),
   };
 
   const system =
-    "Sos un escritor de diálogos filosóficos para el gran público: claros, humanos, con humor y con ideas de verdad. Sabés explicar cosas complejas con palabras simples y con un toque de absurdo lógico al estilo de Lewis Carroll. Respondés SIEMPRE con un único objeto JSON válido, sin texto extra, con las comillas dobles internas correctamente escapadas.";
+    "Sos un escritor de diálogos filosóficos para el gran público: claros, humanos, con humor y con ideas de verdad. Sabés explicar cosas complejas con palabras simples y con un toque de absurdo lógico al estilo de Lewis Carroll, sin copiarlo. Respondés SIEMPRE con un único objeto JSON válido, sin texto extra, con las comillas dobles internas correctamente escapadas.";
 
-  const user_prompt = `Escribí un diálogo filosófico breve entre dos personajes fijos, en español, de entre 200 y 260 palabras en total (escena inicial, diálogo y telón).
+  const user_prompt = `Escribí un diálogo filosófico breve entre dos personajes fijos, en español, de entre 200 y 260 palabras en total. Es solamente una conversación: sin escena, sin acotaciones, sin descripciones de acciones, sin narrador, sin corchetes ni paréntesis, sin asteriscos. Solo lo que dicen, nada más.
 
-LOS PERSONAJES (siempre son estos dos, inspirados en "Alicia en el país de las maravillas"; no inventes otros):
-- ALIS: joven, curiosa y seria. Razona de verdad, hace preguntas simples que desarman las ideas grandes y se molesta con las contradicciones. A veces le sale una sabiduría inesperada.
-- SOMBRERÍN: excéntrico, sociable, siempre en medio de un té que no termina. Razona con lógica impecable a partir de ideas disparatadas, hace juegos de palabras y acertijos, da vueltas, pero de vez en cuando suelta una verdad profunda sin darse cuenta. Cita a filósofos con mucha seguridad.
+LOS PERSONAJES (siempre son estos dos; no inventes otros). Sus nombres se parecen entre sí, como Rómulo y Remo, y sus personalidades son opuestas:
+- DUDO: escéptico, cuidadoso y serio. Duda de todo, pide definiciones, desarma las afirmaciones apuradas y es melancólico. Lee mucho y es quien cita a los filósofos. Le cuesta reconocer que lo está pasando bien.
+- DADO: impulsivo, optimista y ocurrente. Dice lo primero que piensa, saca conclusiones a toda velocidad y razona con una lógica disparatada pero con reglas propias, como la de los personajes de Lewis Carroll. De vez en cuando, sin darse cuenta, dice algo muy profundo.
+Hablan con confianza, como dos amigos que se conocen de toda la vida y no se ponen de acuerdo en nada. No menciones la relación entre los nombres.
 
-TEMA SORTEADO: ${s.tema}. Que conversen sobre ese asunto complejo con lenguaje simple y cotidiano, como si se lo explicaran a un amigo: palabras sencillas, frases cortas, nada de jerga académica. Que haya ideas de verdad, no solo chistes, y que el diálogo avance (cada intervención aporta algo nuevo, nada de repetir).
+INSPIRACIÓN: el espíritu de "Alicia en el país de las maravillas" (lógica disparatada, juegos de palabras, acertijos), pero propio y original. Nada de escenarios, objetos ni personajes del libro: ni té, ni sombreros, ni relojes de bolsillo, ni gatos que desaparecen, ni reinas, ni conejos.
+
+TEMA SORTEADO: ${s.tema}. Que conversen sobre ese asunto complejo con lenguaje simple y cotidiano, como si se lo explicaran a un amigo: palabras sencillas, frases cortas, nada de jerga académica. Que haya ideas de verdad, no solo chistes, y que el diálogo avance (cada intervención aporta algo nuevo, nada de repetir). Empieza hablando ${s.arranca}.
 
 FILÓSOFOS: de vez en cuando (una o dos veces en todo el diálogo, no más) uno de los dos cita o menciona una idea de un filósofo real. Sugeridos para esta ejecución: ${s.filosofos.join(" y ")}; si no encajan con el tema, usá otro filósofo real. MUY IMPORTANTE: citá ideas reales y conocidas, bien atribuidas; si no estás seguro de una frase textual, parafraseá la idea ("como decía Heráclito, todo fluye"). Nunca inventes una cita ni se la atribuyas a quien no corresponde.
 
-TOQUE DISPARATADO: el diálogo tiene también algunas partes medio ridículas, pero con lógica interna, como el Sombrerero de Alicia: razonamientos absurdos que siguen sus propias reglas y que, de rebote, tocan el tema. Disparate sorteado para esta ejecución (adaptalo con libertad): ${s.disparate}. Lo ridículo ocupa una parte del diálogo, no todo: el resto es una conversación filosófica genuina.
+TOQUE DISPARATADO: el diálogo tiene también algunas partes medio ridículas, pero con lógica interna, de modo que lo absurdo siga reglas propias y, de rebote, toque el tema. Disparate sorteado para esta ejecución (adaptalo con libertad): ${s.disparate}. Lo ridículo ocupa una parte del diálogo, no todo: el resto es una conversación filosófica genuina.
 
 FINAL: ${s.final}.
 
 CALIDAD: que arranque con algo que atrape y cierre con una última línea que quede resonando. Diálogos cortos y vivos, cada personaje con su voz. Imágenes concretas, cero relleno, nada de moraleja explícita ni de explicar el chiste. Sin emojis ni palabras en otros idiomas. Variedad: semilla de esta ejecución, ${semilla}.
 
-FORMATO: "titulo" corto (hasta 6 palabras), sugerente, sin comillas. "escena" es una acotación inicial breve (1 oración, en presente) con el lugar y la situación. "dialogo" es una lista de entre 12 y 16 intervenciones, cada una con "personaje" (exactamente ALIS o SOMBRERÍN) y "texto" (lo que dice; puede incluir acotaciones breves entre corchetes, como [sirve té]). "telon" es una acotación final breve (una oración). No agregues explicaciones, comentarios ni notas por fuera de esos campos.
+FORMATO: "dialogo" es una lista de entre 12 y 16 intervenciones, cada una con "personaje" (exactamente DUDO o DADO) y "texto" (lo que dice, nada más). No agregues título, explicaciones, comentarios ni notas.
 
 Devolvé exactamente este JSON:
-{"titulo":"el título","escena":"la acotación inicial","dialogo":[{"personaje":"ALIS","texto":"..."}],"telon":"la acotación final"}`;
+{"dialogo":[{"personaje":"${s.arranca}","texto":"..."}]}`;
 
   try {
     const r = await fetch("https://api.deepseek.com/chat/completions", {
@@ -100,7 +114,7 @@ Devolvé exactamente este JSON:
         temperature: 1.05,
         top_p: 0.95,
         presence_penalty: 0.3,
-        max_tokens: 1800,
+        max_tokens: 1600,
       }),
       signal: AbortSignal.timeout(22000),
     });
@@ -114,23 +128,17 @@ Devolvé exactamente este JSON:
       throw new Error("respuesta de la IA ilegible, probá de nuevo");
     }
 
-    // Solo los dos personajes fijos
+    // Solo los dos personajes fijos, y solo lo que dicen
     const dialogo = (Array.isArray(out.dialogo) ? out.dialogo : [])
       .map((d) => {
         const n = norm(d && (d.personaje || d.actor));
-        const personaje = n.startsWith("ALIS") ? "ALIS" : n.startsWith("SOMBRER") ? "SOMBRERÍN" : "";
-        return { personaje, texto: String((d && d.texto) || "").trim() };
+        const personaje = n.startsWith("DUDO") ? "DUDO" : n.startsWith("DADO") ? "DADO" : "";
+        return { personaje, texto: limpiar(d && d.texto) };
       })
       .filter((d) => d.personaje && d.texto);
     if (dialogo.length < 4) throw new Error("el diálogo salió incompleto, probá de nuevo");
 
-    return json(200, {
-      titulo: String(out.titulo || "Sin título").replace(/^["“”]+|["“”]+$/g, "").trim(),
-      escena: String(out.escena || "").trim(),
-      dialogo,
-      telon: String(out.telon || "").trim(),
-      tema: s.tema,
-    });
+    return json(200, { dialogo, tema: s.tema });
   } catch (e) {
     return json(500, { error: "No se pudo generar el diálogo (" + (e.name === "TimeoutError" ? "tiempo agotado" : e.message) + ")" });
   }

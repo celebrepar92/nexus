@@ -272,24 +272,23 @@ function loadPoem() {
   return state.poemP;
 }
 function introText(p) {
-  return `Diálogo filosófico escrito por una inteligencia artificial (${AI_MODEL}) entre Alis y Sombrerín sobre ${p.tema || "la vida"}.`;
+  return `Diálogo filosófico escrito por una inteligencia artificial (${AI_MODEL}) entre Dudo y Dado sobre ${p.tema || "la vida"}.`;
 }
+const tituloTema = p => { const t = String(p.tema || "la vida"); return t.charAt(0).toUpperCase() + t.slice(1); };
 function renderPoem() {
   const box = $("poemBox"); box.textContent = "";
   const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "Alis y Sombrerín están conversando…");
+  if (state.poemP) return add("sk", "Dudo y Dado están conversando…");
   if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
   const p = state.poem; if (!p) return;
   add("m", "DIÁLOGO FILOSÓFICO GENERADO CON IA");
-  add("t", "\u201C" + p.titulo + "\u201D");
+  add("t", tituloTema(p));
   add("acot", introText(p));
-  if (p.escena) add("acot", "(" + p.escena + ")");
   p.dialogo.forEach(d => {
     const e = document.createElement("div"); e.className = "l";
     const w = document.createElement("b"); w.textContent = String(d.personaje).toUpperCase() + ": ";
     e.appendChild(w); e.appendChild(document.createTextNode(d.texto)); box.appendChild(e);
   });
-  if (p.telon) add("acot", "(" + p.telon + ")");
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -452,8 +451,6 @@ function drawPoem(doc, p, top, bottom) {
   const X = 15, W = 180, avail = bottom - top;
   const GREYS = [226, 244, 208, 236]; // un gris distinto por personaje (se distingue aunque se imprima en blanco y negro)
   const intro = safe(introText(p)).trim();
-  const escena = p.escena ? "(" + safe(p.escena).trim() + ")" : "";
-  const telon = p.telon ? "(" + safe(p.telon).trim() + ")" : "";
   const rows = (p.dialogo || []).map(d => ({ who: safe(d.personaje).toUpperCase().trim(), text: safe(d.texto).trim() }));
   const order = []; rows.forEach(r => { if (!order.includes(r.who)) order.push(r.who); });
 
@@ -466,16 +463,14 @@ function drawPoem(doc, p, top, bottom) {
     const items = []; let h = HEAD;
     F("italic", fs); const il = doc.splitTextToSize(intro, W - 7);
     items.push({ k: "intro", l: il, h: boxH(il.length, fs, lh) });
-    if (escena) { F("italic", fs); const l = doc.splitTextToSize(escena, W - 7); items.push({ k: "acot", l, h: boxH(l.length, fs, lh) }); }
     F("bold", nfs);
     const nw = Math.max(...order.map(n => doc.getTextWidth(n)), 0);
-    const nameW = Math.min(Math.max(nw + 2 * padX, 15), 36);
+    const nameW = Math.min(Math.max(nw + 2 * padX, 14), 36);
     rows.forEach(r => {
       F("bold", nfs); const nl = doc.splitTextToSize(r.who, nameW - 2 * padX);
       F("normal", fs); const tl = doc.splitTextToSize(r.text, W - nameW - 2 * padX);
       items.push({ k: "row", r, nl, tl, h: boxH(Math.max(nl.length, tl.length), fs, lh) });
     });
-    if (telon) { F("italic", fs); const l = doc.splitTextToSize(telon, W - 7); items.push({ k: "telon", l, h: boxH(l.length, fs, lh) }); }
     items.forEach(it => { h += it.h + gap; });
     return { fs, lh, nfs, padX, nameW, items, h };
   }
@@ -488,7 +483,7 @@ function drawPoem(doc, p, top, bottom) {
   doc.setFont("courier", "normal"); doc.setFontSize(6.5);
   doc.text("DIÁLOGO FILOSÓFICO", 105, top + 3.5, { align: "center" });
   doc.setFont("courier", "bold"); doc.setFontSize(11.5);
-  doc.text("\u201C" + one(doc, safe(p.titulo).toUpperCase(), 170) + "\u201D", 105, top + 10, { align: "center" });
+  doc.text(one(doc, safe(tituloTema(p)).toUpperCase(), 170), 105, top + 10, { align: "center" });
 
   let y = top + HEAD;
   doc.setLineWidth(.25);
@@ -510,11 +505,6 @@ function drawPoem(doc, p, top, bottom) {
       doc.setTextColor(40); F("italic", L.fs);
       const base = y + padY + L.fs * .28;
       it.l.forEach((l, i) => doc.text(l, X + 3.5, base + i * L.lh));
-    } else {
-      doc.setFillColor(247, 247, 247); doc.roundedRect(X, y, W, it.h, 1, 1, "F");
-      doc.setTextColor(50); F("italic", L.fs);
-      const base = y + padY + L.fs * .28;
-      it.l.forEach((l, i) => it.k === "telon" ? doc.text(l, 105, base + i * L.lh, { align: "center" }) : doc.text(l, X + 3.5, base + i * L.lh));
     }
     y += it.h + gap;
   });
