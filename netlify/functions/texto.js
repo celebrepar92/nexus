@@ -75,6 +75,12 @@ const TIPOS = {
   })
 };
 
+// Si el navegador pide imagen, la IA también describe una pintura que combine con el ánimo del texto.
+const PLAN_TXT = ` Además, agregá al JSON una clave "plan" (objeto) que describa una pintura en blanco y negro que acompañe al texto y refleje su ánimo, con estos campos: ` +
+  `"genero" (uno de: paisaje, marina, naturaleza_muerta, campos, vortice), "composicion" (tercios, aurea, centrada, diagonal, triangular), ` +
+  `"luz" (izquierda, derecha, arriba), "clave" (alta = luminosa, media, baja = sombría), "pincelada" (suave, empastada, fluida, fina), ` +
+  `"formato" (horizontal, vertical, cuadrado) y los números "contraste" (0.2 a 1), "horizonte" (0.28 a 0.7), "densidad" (0.15 a 1), "neblina" (0 a 0.8).`;
+
 const resp = (code, obj) => ({ statusCode: code, headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }, body: JSON.stringify(obj) });
 
 exports.handler = async (event, context) => {
@@ -90,8 +96,9 @@ exports.handler = async (event, context) => {
   if (tipo === "sorpresa" || !TIPOS[tipo]) tipo = pick(Object.keys(TIPOS));
   const tema = String(q.tema || "").replace(/[\r\n]+/g, " ").trim().slice(0, 120) || pick(TEMAS);
 
+  const imagen = String(q.imagen || "") === "1";
   const cfg = TIPOS[tipo](tema, { filosofos: pickN(FILOSOFOS, 3) });
-  const prompt = cfg.prompt.replace("__ESTILO__", cfg.meta || "");
+  const prompt = cfg.prompt.replace("__ESTILO__", cfg.meta || "") + (imagen ? PLAN_TXT : "");
 
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 24000);
@@ -104,7 +111,7 @@ exports.handler = async (event, context) => {
         messages: [{ role: "system", content: SYS }, { role: "user", content: prompt }],
         response_format: { type: "json_object" },
         temperature: cfg.temp,
-        max_tokens: cfg.max
+        max_tokens: cfg.max + (imagen ? 250 : 0)
       }),
       signal: ctl.signal
     });
@@ -122,7 +129,8 @@ exports.handler = async (event, context) => {
       tipo,
       titulo: String(j.titulo || cfg.nombre).slice(0, 90),
       texto: String(j.texto).replace(/\r/g, "").trim().slice(0, 3800),
-      meta: cfg.meta && tipo === "dialogo" ? cfg.meta : (tipo === "poema" ? cfg.meta : "")
+      meta: cfg.meta && tipo === "dialogo" ? cfg.meta : (tipo === "poema" ? cfg.meta : ""),
+      plan: imagen && j.plan && typeof j.plan === "object" ? j.plan : undefined
     });
   } catch (e) {
     return resp(504, { error: e.name === "AbortError" ? "La IA tardó demasiado" : "Error: " + e.message });
