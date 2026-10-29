@@ -69,6 +69,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
 .poem .l b{font-size:.78rem;letter-spacing:.04em}
 .poem .sk{color:var(--mut);font-style:italic;animation:p 1.2s ease-in-out infinite}
 @keyframes p{50%{opacity:.4}}
+.poem img{width:100%;display:block;border-radius:6px;margin:0 0 10px}
 .link{background:none;border:0;padding:0;margin-top:10px;color:var(--fg);font:inherit;font-size:.82rem;font-weight:600;text-decoration:underline;cursor:pointer}
 
 .note{margin:8px 0 0;font-size:11.5px;color:var(--mut)}
@@ -110,15 +111,15 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
     <div class="group">
       <label>Contenido de la hoja</label>
       <div class="seg" id="segMode">
-        <button type="button" data-v="poema">Debate filosófico IA</button>
+        <button type="button" data-v="gen">Obra generada por IA</button>
         <button type="button" data-v="azar">Obra al azar</button>
         <button type="button" data-v="propia">Obra propia</button>
         <button type="button" data-v="solo">Solo QR</button>
       </div>
 
-      <div id="pPoema">
-        <div class="poem" id="poemBox"></div>
-        <button class="link" id="poemBtn" type="button">↻ Otro debate</button>
+      <div id="pGen">
+        <div class="poem" id="genBox"></div>
+        <button class="link" id="genAgain" type="button">↻ Otra obra</button>
       </div>
 
       <p class="note hide" id="pAzar">Se elige una pintura de dominio público (Art Institute of Chicago o The Met), en blanco y negro.</p>
@@ -164,7 +165,8 @@ const store = {
   get: (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
 };
-const state = { com: store.get("com", "inv"), mode: store.get("mode", "poema"), poem: null, poemP: null, poemErr: null };
+const state = { com: store.get("com", "inv"), mode: store.get("mode", "gen"), obra: null, obraP: null };
+if (!["gen","azar","propia","solo"].includes(state.mode)) state.mode = "gen";
 if (!COMISIONES[state.com]) state.com = "inv";
 
 function setMsg(t, err) { const m = $("msg"); m.textContent = t || ""; m.className = err ? "err" : ""; }
@@ -189,7 +191,7 @@ function activarPanel() {
   if (panelListo) return; panelListo = true;
   initUI();
   checkStatus();
-  if (state.mode === "poema") loadPoem().catch(() => {});
+  if (state.mode === "gen") loadObra().catch(() => {});
 }
 
 /* ================== ESTADO DE ASISTENCIA ================== */
@@ -235,62 +237,175 @@ function initUI() {
   const segMode = $("segMode");
   const paintMode = () => {
     markSeg(segMode, state.mode);
-    $("pPoema").classList.toggle("hide", state.mode !== "poema");
+    $("pGen").classList.toggle("hide", state.mode !== "gen");
     $("pAzar").classList.toggle("hide", state.mode !== "azar");
     $("pPropia").classList.toggle("hide", state.mode !== "propia");
   };
   bindSeg(segMode, v => {
     state.mode = v; store.set("mode", v); paintMode();
-    if (v === "poema") loadPoem().catch(() => {});
+    if (v === "gen") loadObra().catch(() => {});
   });
   paintMode();
 
-  $("poemBtn").addEventListener("click", () => { if (state.poemP) return; state.poem = null; loadPoem().catch(() => {}); });
+  $("genAgain").addEventListener("click", () => { if (state.obraP) return; state.obra = null; loadObra().catch(() => {}); });
   $("genBtn").addEventListener("click", generatePDF);
 }
 
-/* ================== POEMA (IA vía función de Netlify) ================== */
-async function fetchPoem() {
-  const user = netlifyIdentity.currentUser();
-  if (!user) throw new Error("sesión vencida, volvé a ingresar");
-  const token = await user.jwt();
-  const r = await fetch("/.netlify/functions/poema", { headers: { Authorization: "Bearer " + token } });
-  let data = {}; try { data = await r.json(); } catch (e) {}
-  if (!r.ok) throw new Error(data.error || ("error " + r.status));
-  if (!data.dialogo || !data.dialogo.length) throw new Error("respuesta vacía");
-  return data;
-}
-function loadPoem() {
-  if (state.poem) return Promise.resolve(state.poem);
-  if (state.poemP) return state.poemP;
-  state.poemErr = null;
-  state.poemP = fetchPoem()
-    .then(p => (state.poem = p))
-    .catch(e => { state.poemErr = e.message; throw e; })
-    .finally(() => { state.poemP = null; renderPoem(); });
-  renderPoem();
-  return state.poemP;
-}
-function introText(p) {
-  const n = (p.filosofos && p.filosofos.length) ? p.filosofos : ["Aristóteles", "Hegel", "Marx"];
-  const lst = n.length > 1 ? n.slice(0, -1).join(", ") + " y " + n[n.length - 1] : n[0];
-  return `Debate imaginario entre ${lst} sobre ${p.tema || "la vida"}, escrito por una inteligencia artificial (${AI_MODEL}).`;
-}
-const tituloTema = p => { const t = String(p.tema || "la vida"); return t.charAt(0).toUpperCase() + t.slice(1); };
-function renderPoem() {
-  const box = $("poemBox"); box.textContent = "";
-  const add = (cls, txt) => { const e = document.createElement("div"); e.className = cls; e.textContent = txt; box.appendChild(e); };
-  if (state.poemP) return add("sk", "Tres filósofos están debatiendo…");
-  if (state.poemErr) return add("m", "No se pudo generar: " + state.poemErr);
-  const p = state.poem; if (!p) return;
-  add("m", "DEBATE FILOSÓFICO GENERADO CON IA");
-  add("t", tituloTema(p));
-  add("acot", introText(p));
-  p.dialogo.forEach(d => {
-    const e = document.createElement("div"); e.className = "l";
-    const w = document.createElement("b"); w.textContent = String(d.personaje).toUpperCase() + ": ";
-    e.appendChild(w); e.appendChild(document.createTextNode(d.texto)); box.appendChild(e);
+/* ================== OBRA GENERADA (plan: IA · pintura: algoritmo) ================== */
+const LS = { gen: ["paisaje","marina","naturaleza_muerta","campos","vortice"], composicion: ["tercios","aurea","centrada","diagonal","triangular"],
+  luz: ["izquierda","derecha","arriba"], clave: ["alta","media","baja"], pincelada: ["suave","empastada","fluida","fina"], formato: ["horizontal","vertical","cuadrado"] };
+const GL = { paisaje:"Paisaje", marina:"Marina", naturaleza_muerta:"Naturaleza muerta", campos:"Campos de color", vortice:"Cielo en torbellino" };
+const NOM = { paisaje:"un paisaje", marina:"una marina", naturaleza_muerta:"una naturaleza muerta", campos:"un campo de color", vortice:"un cielo en torbellino" };
+const REF = { paisaje:["Turner","Corot","Friedrich","Constable"], marina:["Turner","Whistler","Boudin"], naturaleza_muerta:["Morandi","Chardin","Zurbarán","Cézanne"], campos:["Rothko","Newman","Reinhardt"], vortice:["Van Gogh","Munch","Kandinsky"] };
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const num = (v, a, b) => { v = parseFloat(v); return isNaN(v) ? a + Math.random() * (b - a) : Math.max(a, Math.min(b, v)); };
+
+// Valida el plan de la IA (o lo inventa localmente si falta): ningún valor inválido llega al pintor.
+function normPlan(p) {
+  p = p || {}; const o = {};
+  [["genero","gen"],["composicion"],["luz"],["clave"],["pincelada"],["formato"]].forEach(([k, l]) => {
+    const v = String(p[k] || "").toLowerCase().trim().replace(/ /g, "_"); o[k] = LS[l || k].includes(v) ? v : pick(LS[l || k]);
   });
+  o.contraste = num(p.contraste, .2, 1); o.horizonte = num(p.horizonte, .28, .7); o.densidad = num(p.densidad, .15, 1); o.neblina = num(p.neblina, 0, .8);
+  o.referencias = Array.isArray(p.referencias) && p.referencias.length ? p.referencias.slice(0, 3).map(s => String(s).slice(0, 30)) : [pick(REF[o.genero])];
+  o.titulo = String(p.titulo || "").slice(0, 70) || "Sin título n.º " + (1 + Math.floor(Math.random() * 999));
+  const mood = { alta: "una calma luminosa", media: "un equilibrio sereno", baja: "un clima grave y silencioso" }[o.clave];
+  o.explicacion = String(p.explicacion || "").slice(0, 900) ||
+    `Quise pintar ${NOM[o.genero]} con composición ${o.composicion}, de modo que el motivo principal guíe la mirada. La luz entra desde ${o.luz} y la escala tonal es de clave ${o.clave}, para lograr ${mood}. Trabajé con pincelada ${o.pincelada}, pensando en ${o.referencias.join(" y ")}.`;
+  return o;
+}
+
+async function crearObra() {
+  let plan = null, fuente = "algoritmo local";
+  try {
+    const user = netlifyIdentity.currentUser(), token = await user.jwt();
+    const r = await fetch("/.netlify/functions/obra?n=" + Date.now(), { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(25000) });
+    if (r.ok) { plan = await r.json(); fuente = AI_MODEL; }
+  } catch (e) {}
+  plan = normPlan(plan);
+  return Object.assign({ plan, fuente }, pintar(plan));
+}
+function loadObra() {
+  if (state.obra) return Promise.resolve(state.obra);
+  if (state.obraP) return state.obraP;
+  state.obraP = crearObra().then(o => (state.obra = o)).finally(() => { state.obraP = null; renderObra(); });
+  renderObra();
+  return state.obraP;
+}
+function renderObra() {
+  const box = $("genBox"); box.textContent = "";
+  const add = (cls, t) => { const e = document.createElement("div"); e.className = cls; e.textContent = t; box.appendChild(e); };
+  if (state.obraP) return add("sk", "La IA está concibiendo una obra…");
+  const o = state.obra; if (!o) return;
+  const im = new Image(); im.src = o.data; box.appendChild(im);
+  add("t", o.plan.titulo);
+  add("m", `${GL[o.plan.genero]} · ${o.plan.referencias.join(", ")} · ${o.fuente}`);
+  add("l", o.plan.explicacion);
+  if (o.fuente !== AI_MODEL) add("c", "DeepSeek no respondió: el plan y la explicación los generó el algoritmo local.");
+}
+
+/* Pintor. Semilla de 128 bits desde crypto: 2^128 obras posibles, repetir una es estadísticamente imposible.
+   Todo se dibuja en grises; al final se agrega pincelada, grano y viñeta. */
+function pintar(P) {
+  const s4 = new Uint32Array(4); crypto.getRandomValues(s4);
+  const id = [...s4].map(n => n.toString(16).padStart(8, "0")).join("").toUpperCase();
+  let [a, b, c, d] = s4;
+  const r = () => { let t = (a + b) | 0; a = b ^ (b >>> 9); b = (c + (c << 3)) | 0; c = (c << 21) | (c >>> 11); d = (d + 1) | 0; t = (t + d) | 0; c = (c + t) | 0; return (t >>> 0) / 4294967296; };
+  for (let i = 0; i < 20; i++) r();
+  const W = 900, H = Math.round(W * { horizontal: .68 + r() * .1, vertical: 1.25 + r() * .15, cuadrado: 1 }[P.formato]);
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const x = cv.getContext("2d", { willReadFrequently: true });
+  const K = { alta: .14, media: 0, baja: -.16 }[P.clave], C = .8 + P.contraste * .9;
+  const T = (v, al) => { v = (255 * Math.max(0, Math.min(1, (v - .5) * C + .5 + K))) | 0; return al == null ? `rgb(${v},${v},${v})` : `rgba(${v},${v},${v},${al})`; };
+  const L = { izquierda: -1, derecha: 1, arriba: 0 }[P.luz];
+  const fx = W * { tercios: r() < .5 ? 1 / 3 : 2 / 3, aurea: r() < .5 ? .382 : .618, centrada: .5, diagonal: r() < .5 ? .22 : .78, triangular: .5 }[P.composicion];
+  const lx = W * (L < 0 ? .12 + r() * .2 : L > 0 ? .68 + r() * .2 : .35 + r() * .3);
+  const lin = (y0, y1, v0, v1) => { const g = x.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, T(v0)); g.addColorStop(1, T(v1)); return g; };
+  const blob = (cx, cy, rd, v, al, sx = 1, sy = 1) => { x.save(); x.translate(cx, cy); x.scale(sx, sy); const g = x.createRadialGradient(0, 0, 0, 0, 0, rd); g.addColorStop(0, T(v, al)); g.addColorStop(1, T(v, 0)); x.fillStyle = g; x.beginPath(); x.arc(0, 0, rd, 0, 7); x.fill(); x.restore(); };
+  const ridge = (amp, fr) => { const ph = [0, 1, 2, 3].map(() => r() * 9), f = [1, 2.3, 5.1, 11].map(m => m * fr * (.7 + r() * .6)); return t => amp * (Math.sin(t * f[0] + ph[0]) * .5 + Math.sin(t * f[1] + ph[1]) * .25 + Math.sin(t * f[2] + ph[2]) * .12 + Math.sin(t * f[3] + ph[3]) * .06); };
+  const mount = (base, amp, fr, st) => { const rg = ridge(amp, fr); x.fillStyle = st; x.beginPath(); x.moveTo(0, H); for (let X = 0; X <= W; X += 6) x.lineTo(X, base + rg(X / W * 6.28)); x.lineTo(W, H); x.fill(); };
+  const sky = hz => {
+    x.fillStyle = lin(0, hz, .3 + r() * .25, .82 + P.neblina * .1); x.fillRect(0, 0, W, hz + 2);
+    blob(lx, hz * .75, W * .7, .98, .9, 1, .7);
+    for (let i = 0, n = 6 + ((P.densidad * 22) | 0); i < n; i++) blob(r() * W, r() * hz * .85, W * (.1 + r() * .2), .55 + r() * .45, .18 + r() * .2, 1.6 + r() * 1.5, .28 + r() * .25);
+    blob(lx, hz * .7, W * .035, 1, 1);
+  };
+  const tree = (tx, ty, s) => {
+    x.strokeStyle = T(.05); x.lineWidth = s * .05; x.beginPath(); x.moveTo(tx, ty); x.lineTo(tx + (r() - .5) * s * .1, ty - s * .8); x.stroke();
+    for (let i = 0; i < 16; i++) blob(tx + (r() - .5) * s * .55, ty - s * (.75 + r() * .45), s * (.14 + r() * .14), .06 + r() * .12, .9);
+  };
+  const G = {
+    paisaje() {
+      const hz = H * P.horizonte; sky(hz); const nl = 2 + ((P.densidad * 3) | 0);
+      for (let k = 0; k < nl; k++) { const dp = k / nl; mount(hz - H * .03 * (nl - k) + H * .02, H * (.05 + .07 * (1 - dp)), .8 + r(), T(.78 - dp * .42 + P.neblina * (1 - dp) * .15)); }
+      mount(hz + H * .04, H * .02, 1.5, lin(hz, H, .3, .08));
+      for (let i = 0, n = 1 + ((P.densidad * 5) | 0); i < n; i++) tree(r() * W, hz + H * (.08 + r() * .25), H * (.12 + r() * .1));
+      tree(fx, hz + H * .18, H * .38);
+    },
+    marina() {
+      const hz = H * P.horizonte; sky(hz); mount(hz + 2, H * .02, 2, T(.62));
+      x.fillStyle = lin(hz, H, .55, .12); x.fillRect(0, hz + H * .01, W, H);
+      blob(lx, hz + H * .15, W * .05, .95, .8, 1, 5);
+      for (let i = 0; i < 260; i++) { const y = hz + Math.pow(r(), 1.6) * (H - hz), dp = (y - hz) / (H - hz), xx = r() * W, ln = W * (.02 + dp * .15); x.strokeStyle = T(.3 + r() * .5, .5); x.lineWidth = 1 + dp * 3; x.beginPath(); x.moveTo(xx, y); x.lineTo(xx + ln, y + (r() - .5) * 3); x.stroke(); }
+      const bx = fx, by = hz + H * .12, s = W * (.05 + r() * .05);
+      x.fillStyle = T(.05); x.beginPath(); x.moveTo(bx - s, by - s * .15); x.lineTo(bx + s, by - s * .15); x.quadraticCurveTo(bx + s * .7, by + s * .3, bx + s * .35, by + s * .3); x.lineTo(bx - s * .5, by + s * .3); x.fill();
+      x.fillRect(bx - s * .03, by - s * 2.6, s * .06, s * 2.5);
+      x.fillStyle = T(.9); x.beginPath(); x.moveTo(bx + s * .08, by - s * 2.5); x.lineTo(bx + s * .08, by - s * .3); x.lineTo(bx + s * .85, by - s * .3); x.fill();
+      blob(bx, by + s * .9, s, .04, .5, 1, .3);
+    },
+    naturaleza_muerta() {
+      x.fillStyle = lin(0, H, .1 + r() * .08, .04); x.fillRect(0, 0, W, H); blob(lx, H * .2, W * .6, .55, .5);
+      const ty = H * (.62 + r() * .08); x.fillStyle = lin(ty, H, .38, .1); x.fillRect(0, ty, W, H - ty);
+      for (let i = 0, n = 3 + ((P.densidad * 3) | 0); i < n; i++) {
+        const mid = 1 - Math.abs(i - (n - 1) / 2) / (n / 2), s = W * (.05 + r() * .04) * (1 + mid * .7), cx = W * (.18 + .64 * (i + .5) / n) + (r() - .5) * W * .05, by = ty + H * (.04 + r() * .12);
+        x.fillStyle = T(.01, .5); x.beginPath(); x.ellipse(cx - L * s * .9, by, s * 1.5, s * .22, 0, 0, 7); x.fill();
+        if (r() < .5) { const g = x.createRadialGradient(cx + L * s * .4, by - s * 1.35, s * .05, cx, by - s, s * 1.05); g.addColorStop(0, T(.85)); g.addColorStop(1, T(.03)); x.fillStyle = g; x.beginPath(); x.arc(cx, by - s, s, 0, 7); x.fill(); }
+        else {
+          const g = x.createLinearGradient(cx - s * .8, 0, cx + s * .8, 0); g.addColorStop(0, T(L < 0 ? .65 : L > 0 ? .08 : .15)); g.addColorStop(.5, T(L ? .3 : .65)); g.addColorStop(1, T(L > 0 ? .65 : L < 0 ? .08 : .15)); x.fillStyle = g;
+          x.beginPath(); x.moveTo(cx - s * .8, by); x.lineTo(cx - s * .8, by - s * 1.8); x.quadraticCurveTo(cx - s * .8, by - s * 2.5, cx - s * .25, by - s * 2.7); x.lineTo(cx - s * .25, by - s * 3.6); x.lineTo(cx + s * .25, by - s * 3.6); x.lineTo(cx + s * .25, by - s * 2.7); x.quadraticCurveTo(cx + s * .8, by - s * 2.5, cx + s * .8, by - s * 1.8); x.lineTo(cx + s * .8, by); x.fill();
+        }
+      }
+    },
+    campos() {
+      x.fillStyle = T(.3 + r() * .2); x.fillRect(0, 0, W, H);
+      const n = 2 + ((r() * 2) | 0), hs = Array.from({ length: n }, () => .7 + r() * .6), tot = hs.reduce((p, q) => p + q, 0); let y = H * .07;
+      hs.forEach(h0 => { const h = H * .82 * h0 / tot, v = .1 + r() * .55; x.shadowColor = T(v); x.shadowBlur = 45; x.fillStyle = T(v, .55);
+        for (let i = 0; i < 4; i++) x.fillRect(W * .09 + (r() - .5) * W * .04, y + (r() - .5) * 6, W * .82, h - H * .02); y += h; });
+      x.shadowBlur = 0;
+    },
+    vortice() {
+      x.fillStyle = lin(0, H, .1, .3); x.fillRect(0, 0, W, H);
+      const hz = H * .72, mx = lx, my = H * (.16 + r() * .1), cs = [[mx, my, 1], [W * (.3 + r() * .4), H * (.3 + r() * .1), -1]];
+      for (let i = 0; i < 7000; i++) {
+        let px = r() * W, py = r() * hz, v = .18 + .3 * (1 - py / hz) + .55 * Math.exp(-Math.hypot(px - mx, py - my) / (W * .16)) + r() * .12;
+        x.strokeStyle = T(v, .55); x.lineWidth = 4; x.lineCap = "round"; x.beginPath(); x.moveTo(px, py);
+        for (let k = 0; k < 10; k++) { let vx = .4, vy = Math.sin(px * .01) * .3;
+          cs.forEach(([cx, cy, sg]) => { const dx = px - cx, dy = py - cy, w = Math.exp(-Math.hypot(dx, dy) / (W * .22)), an = Math.atan2(dy, dx) + sg * Math.PI / 2; vx += w * Math.cos(an) * 2; vy += w * Math.sin(an) * 2; });
+          const m = Math.hypot(vx, vy) || 1; px += vx / m * 5; py += vy / m * 5; x.lineTo(px, py); }
+        x.stroke();
+      }
+      blob(mx, my, W * .06, 1, 1); mount(hz, H * .03, 1.2, T(.08));
+      for (let i = 0; i < 14 * P.densidad + 4; i++) { const hx = r() * W, hw = W * (.02 + r() * .03), hh = H * (.02 + r() * .03); x.fillStyle = T(.12); x.fillRect(hx, hz + H * .03 + r() * H * .1, hw, hh); x.fillStyle = T(.9); x.fillRect(hx + hw * .3, hz + H * .035 + r() * H * .1, hw * .25, hw * .25); }
+      const top = H * .16, s = W * .06; x.fillStyle = T(.02); x.beginPath(); x.moveTo(fx, top); x.quadraticCurveTo(fx + s * 1.6, H * .5, fx + s * .5, H * .97); x.lineTo(fx - s * .5, H * .97); x.quadraticCurveTo(fx - s * 1.6, H * .5, fx, top); x.fill();
+    }
+  };
+  G[P.genero]();
+
+  // Pincelada: trazos cortos que toman el gris de lo que hay debajo, como una capa de empaste
+  const px0 = x.getImageData(0, 0, W, H).data, [n, ln, wd, al] = { suave: [9000, 26, 3, .35], empastada: [6000, 16, 7, .6], fluida: [8000, 40, 3, .3], fina: [24000, 8, 1.6, .5] }[P.pincelada];
+  x.lineCap = "round";
+  for (let i = 0; i < n; i++) {
+    const px = r() * W, py = r() * H, v = px0[((py | 0) * W + (px | 0)) * 4] + (r() - .5) * 26, an = P.pincelada === "fluida" ? Math.sin(px * .01) + Math.cos(py * .012) : (r() - .5) * 1.2 + (P.pincelada === "empastada" ? .6 : 0);
+    x.strokeStyle = `rgba(${v | 0},${v | 0},${v | 0},${al})`; x.lineWidth = wd * (.5 + r()); x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(an) * ln * (.5 + r()), py + Math.sin(an) * ln * (.5 + r())); x.stroke();
+  }
+  // Grano de papel + viñeta (fuerza gris puro)
+  const im = x.getImageData(0, 0, W, H), q = im.data, vg = P.clave === "baja" ? .6 : .35;
+  for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
+    const i = (Y * W + X) * 4, dx = X / W - .5, dy = Y / H - .5, g = (q[i] + q[i + 1] + q[i + 2]) / 3 * (1 - vg * (dx * dx + dy * dy) * 2.2) + (r() - .5) * 14;
+    q[i] = q[i + 1] = q[i + 2] = g < 0 ? 0 : g > 255 ? 255 : g;
+  }
+  x.putImageData(im, 0, 0);
+  return { data: cv.toDataURL("image/jpeg", .72), ratio: H / W, id };
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -447,82 +562,26 @@ function drawArt(doc, a, top, bottom) {
   dl.forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 4; });
 }
 
-// Diálogo filosófico, pensado para entrar COMPLETO en una sola hoja sin perder legibilidad:
-//  · sin columna de nombres: el nombre va en negrita al comienzo de cada intervención (el texto usa todo el ancho)
-//  · cada intervención lleva una barra lateral de gris propio por personaje (se distingue aunque se imprima en blanco y negro) y fondo alterno
-//  · la introducción es una línea chica bajo el título, sin recuadro
-//  · se elige la letra más grande (hasta 10 pt, de a 0,25) que entre; si sobra lugar, se reparte como aire entre intervenciones
-// Solo si ni con 7 pt entrara (no debería pasar con ~300 palabras), sigue en una hoja más vía nextPage().
-function drawPoem(doc, p, top, bottom, nextPage) {
-  const X = 15, W = 180, BAR = 1.8, avail = bottom - top;
-  const BARS = [35, 140, 205, 90]; // gris de la barra por personaje
-  const intro = safe(introText(p)).trim();
-  const rows = (p.dialogo || []).map(d => ({ who: safe(d.personaje).toUpperCase().trim(), text: safe(d.texto).trim() }));
-  const order = []; rows.forEach(r => { if (!order.includes(r.who)) order.push(r.who); });
-
-  const F = (st, size) => { doc.setFont("helvetica", st); doc.setFontSize(size); };
-  const padY = .9, gap0 = 1.2, textX = X + BAR + 2.2, tw = X + W - 1.5 - textX;
-  const boxH = (n, size, lh) => padY + size * .28 + (n - 1) * lh + padY + .35;
-
-  // Corte de líneas propio: la primera línea comparte renglón con el nombre
-  function wrap(r, fs, nfs) {
-    F("bold", nfs); const nw = doc.getTextWidth(r.who + ":") + 1.6;
-    F("normal", fs);
-    const words = r.text.split(/\s+/).filter(Boolean), lines = [];
-    let cur = "", cw = tw - nw;
-    words.forEach(w => {
-      const t = cur ? cur + " " + w : w;
-      if (!cur || doc.getTextWidth(t) <= cw) cur = t; else { lines.push(cur); cur = w; cw = tw; }
-    });
-    if (cur) lines.push(cur);
-    return { lines, nw };
-  }
-
-  function layout(fs) {
-    const lh = fs * .43, nfs = fs;
-    const F7 = 7; F("italic", F7);
-    const il = doc.splitTextToSize(intro, 172);
-    const HEAD = 10.5 + il.length * 3.1 + 2.2;
-    const items = rows.map(r => { const w = wrap(r, fs, nfs); return { r, lines: w.lines, nw: w.nw, h: boxH(w.lines.length, fs, lh) }; });
-    const total = items.reduce((a, it) => a + it.h, 0) + gap0 * (items.length - 1);
-    return { fs, lh, nfs, il, HEAD, items, total };
-  }
-
-  let L = null;
-  for (let size = 10; size >= 7; size -= .25) { const c = layout(size); if (c.HEAD + c.total <= avail) { L = c; break; } }
-  const overflow = !L;
-  if (!L) L = layout(9);
-
-  // Si sobra lugar en la hoja, se reparte como aire entre intervenciones (hasta un máximo, para que no quede flojo)
-  const n = L.items.length;
-  const gap = overflow || n < 2 ? gap0 : Math.min(gap0 + 2.2, gap0 + Math.max(0, avail - L.HEAD - L.total - .6) / (n - 1));
-
-  // Título + introducción
-  doc.setTextColor(0);
-  doc.setFont("courier", "bold"); doc.setFontSize(11.5);
-  doc.text(one(doc, "DEBATE FILOSÓFICO · " + safe(tituloTema(p)).toUpperCase(), 175), 105, top + 4.5, { align: "center" });
-  doc.setTextColor(70); F("italic", 7);
-  L.il.forEach((l, i) => doc.text(l, 105, top + 9.5 + i * 3.1, { align: "center" }));
-
-  let y = top + L.HEAD, lim = bottom;
-  const continuar = () => {
-    const np = nextPage(); lim = np.bottom; y = np.top + 8;
-    doc.setTextColor(90); doc.setFont("courier", "normal"); doc.setFontSize(7);
-    doc.text("DEBATE FILOSÓFICO · " + one(doc, safe(tituloTema(p)).toUpperCase(), 110) + " · CONTINUACIÓN", 105, np.top + 3.5, { align: "center" });
-  };
-
-  L.items.forEach((it, idx) => {
-    if (y + it.h > lim) continuar();
-    const g = BARS[order.indexOf(it.r.who) % BARS.length];
-    if (idx % 2 === 0) { doc.setFillColor(243, 243, 243); doc.rect(X + BAR, y, W - BAR, it.h, "F"); }
-    doc.setFillColor(g, g, g); doc.rect(X, y, BAR, it.h, "F");
-    const base = y + padY + L.fs * .28;
-    doc.setTextColor(0); F("bold", L.nfs);
-    doc.text(it.r.who + ":", textX, base);
-    doc.setTextColor(20); F("normal", L.fs);
-    it.lines.forEach((l, i) => doc.text(l, i === 0 ? textX + it.nw : textX, base + i * L.lh));
-    y += it.h + gap;
-  });
+// Obra generada: imagen + título + ficha + explicación de la IA (o del algoritmo local si la IA no respondió)
+function drawGen(doc, g, top, bottom) {
+  const p = g.plan, ia = g.fuente === AI_MODEL;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(8.8);
+  const tl = doc.splitTextToSize(safe(p.explicacion), 166).slice(0, 14);
+  const textH = 7 + 5 + 4.5 + 5 + tl.length * 4.1 + 5;
+  const maxH = Math.min(bottom - top - textH, 150), maxW = 175;
+  let h = maxH, w = h / g.ratio; if (w > maxW) { w = maxW; h = w * g.ratio; }
+  doc.addImage(g.data, "JPEG", (210 - w) / 2, top, w, h);
+  let y = top + h + 6.5;
+  doc.setTextColor(0); doc.setFont("courier", "bold"); doc.setFontSize(12);
+  doc.text(one(doc, safe(p.titulo).toUpperCase(), 175), 105, y, { align: "center" }); y += 5;
+  doc.setFont("courier", "normal"); doc.setFontSize(7);
+  doc.text(one(doc, safe(`${GL[p.genero]} · composición ${p.composicion} · luz ${p.luz} · clave ${p.clave} · ref.: ${p.referencias.join(", ")}`).toUpperCase(), 180), 105, y, { align: "center" }); y += 5.5;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(8);
+  doc.text(ia ? `EXPLICACIÓN DE LA IA (${AI_MODEL.toUpperCase()})` : "EXPLICACIÓN (ALGORITMO LOCAL)", 22, y); y += 4.6;
+  doc.setFont("helvetica", "italic"); doc.setFontSize(8.8); doc.setTextColor(30);
+  tl.forEach(l => { doc.text(l, 22, y); y += 4.1; });
+  y += 1.5; doc.setTextColor(110); doc.setFont("courier", "normal"); doc.setFontSize(6.5);
+  doc.text(`Obra única n.º ${g.id.slice(0, 16)} · semilla aleatoria de 128 bits`, 105, Math.min(y, bottom), { align: "center" });
   doc.setTextColor(0);
 }
 // ==PDF-END==
@@ -537,7 +596,7 @@ async function generatePDF() {
     // 1) Contenido (lo único que usa red)
     let content = null, warn = "";
     try {
-      if (state.mode === "poema") { setBusy(true, "Esperando a la IA…"); content = { poem: await loadPoem() }; }
+      if (state.mode === "gen") { setBusy(true, "Esperando a la IA…"); content = { gen: await loadObra() }; }
       else if (state.mode === "azar") { setBusy(true, "Buscando una obra…"); content = { art: await getRandomArt() }; }
       else if (state.mode === "propia") content = { art: await getOwnArt() };
       if (content && content.art) {
@@ -557,12 +616,12 @@ async function generatePDF() {
     const genStr = `Generado: ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     drawHeader(doc, com.nombre, dateStr);
-    const compact = !!(content && content.poem);
+    const compact = !!(content && content.gen);
     if (compact) drawAttendanceQRCompact(doc, com.url, genStr); else drawAttendanceQR(doc, com.url, genStr);
 
     const top = compact ? 83 : 127, bottom = com.wa ? 248 : 287;
     const nextPage = () => { doc.addPage(); drawHeader(doc, com.nombre, dateStr); return { top: 38, bottom: 285 }; };
-    if (content && content.poem) drawPoem(doc, content.poem, top, bottom, nextPage);
+    if (content && content.gen) drawGen(doc, content.gen, top, bottom);
     else if (content && content.art) drawArt(doc, content.art, top, bottom);
 
     if (com.wa) { doc.setPage(1); drawWA(doc, com.wa, com.nombre); }
@@ -577,7 +636,7 @@ async function generatePDF() {
     const clean = com.nombre.normalize("NFD").replace(/[̀-ͯ]/g, "");
     doc.save(`Asistencia_${clean}_${dateStr.replace(/\//g, "-")}.pdf`);
 
-    if (content && content.poem) { state.poem = null; loadPoem().catch(() => {}); } // deja listo el siguiente
+    if (content && content.gen) { state.obra = null; loadObra().catch(() => {}); } // deja listo el siguiente
     setMsg(warn || "Listo ✓", !!warn);
   } catch (e) {
     console.error(e);
