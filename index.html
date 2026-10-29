@@ -519,7 +519,6 @@ function renderTexto() {
   const t = state.texto; if (!t) return;
   if (t.img) { const im = new Image(); im.src = t.img.data; box.appendChild(im); }
   add("t", t.titulo);
-  add("m", `${tipoNombre(t.tipo)} · ${AI_MODEL}${t.meta ? " · " + t.meta : ""}`);
   if (t.elenco && t.elenco.length) {
     add("m", "Participan");
     t.elenco.forEach(e => { const l = add("tl", ""); const b = document.createElement("b"); b.textContent = e.n; l.appendChild(b); l.appendChild(document.createTextNode(" — " + e.d)); });
@@ -529,6 +528,7 @@ function renderTexto() {
     const e = add("tl", ""); if (d.n) { const b = document.createElement("b"); b.textContent = d.n + ": "; e.appendChild(b); } e.appendChild(document.createTextNode(d.t));
   });
   else add("tp", t.texto);
+  add("c", `Generado automáticamente por ${AI_MODEL}`);
 }
 
 /* ================== DIBUJO EN SVG (la IA escribe el código; el navegador lo limpia y lo rasteriza) ================== */
@@ -614,8 +614,8 @@ function renderDibujo() {
   const d = state.dib; if (!d) return;
   const im = new Image(); im.src = d.data; box.appendChild(im);
   add("t", d.titulo);
-  add("m", `${d.nombre} · ${d.fuente}`);
   if (d.desc) add("l", d.desc);
+  add("c", d.fuente === AI_MODEL ? `Generado automáticamente por ${AI_MODEL}` : "Generado automáticamente por el algoritmo local");
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -810,8 +810,7 @@ function drawTexto(doc, t, top, bottom, ctx) {
   }
   doc.setTextColor(0); doc.setFont("courier", "bold"); doc.setFontSize(13);
   doc.splitTextToSize(safe(t.titulo).toUpperCase(), 170).slice(0, 2).forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 6; });
-  doc.setFont("courier", "normal"); doc.setFontSize(7.5);
-  doc.text(one(doc, safe(`${tipoNombre(tipo)} · ${AI_MODEL}${t.meta ? " · " + t.meta : ""}`).toUpperCase(), 180), 105, y, { align: "center" }); y += 8;
+  y += 3;
 
   // Presentación de los participantes (quiénes son), antes del diálogo
   if (t.elenco && t.elenco.length) {
@@ -870,7 +869,7 @@ function drawTexto(doc, t, top, bottom, ctx) {
   }
   y += 3; room(4);
   doc.setTextColor(110); doc.setFont("courier", "normal"); doc.setFontSize(6.5);
-  doc.text(`Generado automáticamente por (${AI_MODEL})`, 105, y, { align: "center" });
+  doc.text(`Generado automáticamente por ${AI_MODEL}`, 105, y, { align: "center" });
   doc.setTextColor(0);
 }
 
@@ -885,15 +884,15 @@ function drawDibujo(doc, d, top, bottom) {
   doc.addImage(d.data, "JPEG", (210 - w) / 2, top, w, h);
   let y = top + h + 6.5;
   doc.setTextColor(0); doc.setFont("courier", "bold"); doc.setFontSize(12);
-  doc.text(one(doc, safe(d.titulo).toUpperCase(), 175), 105, y, { align: "center" }); y += 5;
-  doc.setFont("courier", "normal"); doc.setFontSize(7);
-  doc.text(one(doc, safe(`${d.nombre} · ${ia ? "dibujo en SVG escrito por " + AI_MODEL : "algoritmo local"}`).toUpperCase(), 180), 105, y, { align: "center" }); y += 5.5;
+  doc.text(one(doc, safe(d.titulo).toUpperCase(), 175), 105, y, { align: "center" }); y += 6.5;
   if (tl.length) {
     doc.setFont("helvetica", "bold"); doc.setFontSize(8);
     doc.text(ia ? `EXPLICACIÓN DE LA IA (${AI_MODEL.toUpperCase()})` : "NOTA", 22, y); y += 4.6;
     doc.setFont("helvetica", "italic"); doc.setFontSize(8.8); doc.setTextColor(30);
     tl.forEach(l => { doc.text(l, 22, y); y += 4.1; });
   }
+  y += 2.5; doc.setTextColor(110); doc.setFont("courier", "normal"); doc.setFontSize(6.5);
+  doc.text(ia ? `Generado automáticamente por ${AI_MODEL}` : "Generado automáticamente por el algoritmo local", 105, Math.min(y, bottom), { align: "center" });
   doc.setTextColor(0);
 }
 // ==PDF-END==
