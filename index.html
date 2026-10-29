@@ -70,6 +70,11 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
 .poem .sk{color:var(--mut);font-style:italic;animation:p 1.2s ease-in-out infinite}
 @keyframes p{50%{opacity:.4}}
 .poem img{width:100%;display:block;border-radius:6px;margin:0 0 10px}
+.poem .tp{white-space:pre-wrap;font-size:.95rem;line-height:1.55}
+.poem .tl{font-size:.92rem;line-height:1.45;margin:0 0 6px}
+.poem .tl b{font-size:.74rem;letter-spacing:.04em;text-transform:uppercase}
+.poem .er{color:var(--bad);font-size:.85rem}
+.seg.tipos button{flex:1 1 0;min-width:92px;padding:8px 6px;font-size:13px}
 .link{background:none;border:0;padding:0;margin-top:10px;color:var(--fg);font:inherit;font-size:.82rem;font-weight:600;text-decoration:underline;cursor:pointer}
 
 .note{margin:8px 0 0;font-size:11.5px;color:var(--mut)}
@@ -112,6 +117,7 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
       <label>Contenido de la hoja</label>
       <div class="seg" id="segMode">
         <button type="button" data-v="gen">Obra generada por IA</button>
+        <button type="button" data-v="texto">Texto con IA</button>
         <button type="button" data-v="azar">Obra al azar</button>
         <button type="button" data-v="propia">Obra propia</button>
         <button type="button" data-v="solo">Solo QR</button>
@@ -120,6 +126,13 @@ input[type=file]{font-size:13px;color:var(--mut);width:100%}
       <div id="pGen">
         <div class="poem" id="genBox"></div>
         <button class="link" id="genAgain" type="button">↻ Otra obra</button>
+      </div>
+
+      <div id="pTexto" class="hide" style="margin-top:12px">
+        <div class="seg tipos" id="segTipo"></div>
+        <input type="text" id="temaInput" maxlength="120" placeholder="Tema (opcional): el mar, la espera, la ciudad…" style="margin-top:10px">
+        <div class="poem" id="textoBox"></div>
+        <button class="link" id="textoAgain" type="button">↻ Otro texto</button>
       </div>
 
       <p class="note hide" id="pAzar">Se elige una pintura de dominio público (Art Institute of Chicago o The Met), en blanco y negro.</p>
@@ -165,8 +178,16 @@ const store = {
   get: (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} }
 };
-const state = { com: store.get("com", "inv"), mode: store.get("mode", "gen"), obra: null, obraP: null };
-if (!["gen","azar","propia","solo"].includes(state.mode)) state.mode = "gen";
+// Tipos de texto que puede escribir la IA (el ID viaja a la función /.netlify/functions/texto)
+const TIPOS = [
+  ["haiku", "Haiku"], ["poema", "Poema largo"], ["soneto", "Soneto"], ["limerick", "Limerick"],
+  ["microrrelato", "Microrrelato"], ["fabula", "Fábula"], ["aforismos", "Aforismos"],
+  ["dialogo", "Diálogo filosófico"], ["sorpresa", "Sorpresa"]
+];
+const tipoNombre = id => (TIPOS.find(t => t[0] === id) || [0, "Texto"])[1];
+const state = { com: store.get("com", "inv"), mode: store.get("mode", "gen"), tipo: store.get("tipo", "haiku"), obra: null, obraP: null, texto: null, textoP: null, textoErr: "" };
+if (!["gen","texto","azar","propia","solo"].includes(state.mode)) state.mode = "gen";
+if (!TIPOS.some(t => t[0] === state.tipo)) state.tipo = "haiku";
 if (!COMISIONES[state.com]) state.com = "inv";
 
 function setMsg(t, err) { const m = $("msg"); m.textContent = t || ""; m.className = err ? "err" : ""; }
@@ -192,6 +213,7 @@ function activarPanel() {
   initUI();
   checkStatus();
   if (state.mode === "gen") loadObra().catch(() => {});
+  if (state.mode === "texto") loadTexto().catch(() => {});
 }
 
 /* ================== ESTADO DE ASISTENCIA ================== */
@@ -238,14 +260,24 @@ function initUI() {
   const paintMode = () => {
     markSeg(segMode, state.mode);
     $("pGen").classList.toggle("hide", state.mode !== "gen");
+    $("pTexto").classList.toggle("hide", state.mode !== "texto");
     $("pAzar").classList.toggle("hide", state.mode !== "azar");
     $("pPropia").classList.toggle("hide", state.mode !== "propia");
   };
   bindSeg(segMode, v => {
     state.mode = v; store.set("mode", v); paintMode();
     if (v === "gen") loadObra().catch(() => {});
+    if (v === "texto") loadTexto().catch(() => {});
   });
   paintMode();
+
+  // Selector de tipo de texto + tema opcional
+  const segTipo = $("segTipo");
+  TIPOS.forEach(([id, nombre]) => { const b = document.createElement("button"); b.type = "button"; b.dataset.v = id; b.textContent = nombre; segTipo.appendChild(b); });
+  markSeg(segTipo, state.tipo);
+  bindSeg(segTipo, v => { state.tipo = v; store.set("tipo", v); markSeg(segTipo, v); loadTexto().catch(() => {}); });
+  $("temaInput").addEventListener("change", () => loadTexto().catch(() => {}));
+  $("textoAgain").addEventListener("click", () => { if (state.textoP) return; state.texto = null; loadTexto().catch(() => {}); });
 
   $("genAgain").addEventListener("click", () => { if (state.obraP) return; state.obra = null; loadObra().catch(() => {}); });
   $("genBtn").addEventListener("click", generatePDF);
@@ -406,6 +438,56 @@ function pintar(P) {
   }
   x.putImageData(im, 0, 0);
   return { data: cv.toDataURL("image/jpeg", .72), ratio: H / W, id };
+}
+
+/* ================== TEXTO GENERADO (IA: DeepSeek) ================== */
+const temaActual = () => $("temaInput").value.trim().replace(/\s+/g, " ").slice(0, 120);
+
+async function crearTexto(tipo, tema) {
+  const user = netlifyIdentity.currentUser(), token = await user.jwt();
+  const r = await fetch(`/.netlify/functions/texto?tipo=${encodeURIComponent(tipo)}&tema=${encodeURIComponent(tema)}&n=${Date.now()}`,
+    { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(28000) });
+  if (!r.ok) throw new Error("la IA respondió " + r.status);
+  const t = await r.json();
+  if (!t || !t.texto) throw new Error("respuesta vacía");
+  return { key: tipo + "|" + tema, tipo: t.tipo || tipo, titulo: String(t.titulo || "").slice(0, 90), meta: String(t.meta || "").slice(0, 120), texto: String(t.texto).slice(0, 4000) };
+}
+function loadTexto() {
+  const tipo = state.tipo, tema = temaActual(), key = tipo + "|" + tema;
+  if (state.texto && state.texto.key === key) return Promise.resolve(state.texto);
+  if (state.textoP && state.textoP.key === key) return state.textoP.p;
+  state.texto = null; state.textoErr = "";
+  const p = crearTexto(tipo, tema)
+    .then(t => { if (state.tipo + "|" + temaActual() === key) state.texto = t; return t; })
+    .catch(e => { if (state.tipo + "|" + temaActual() === key) state.textoErr = e.message; throw e; })
+    .finally(() => { if (state.textoP && state.textoP.p === p) state.textoP = null; renderTexto(); });
+  state.textoP = { key, p };
+  renderTexto();
+  return p;
+}
+// "NOMBRE: frase" → [{n, t}]. Las líneas sin nombre se pegan a la intervención anterior.
+function parseDialogo(texto) {
+  const out = [];
+  String(texto).split("\n").map(l => l.trim()).filter(Boolean).forEach(l => {
+    const m = l.match(/^([^:]{1,32}):\s*(.+)$/);
+    if (m) out.push({ n: m[1].trim(), t: m[2].trim() });
+    else if (out.length) out[out.length - 1].t += " " + l;
+    else out.push({ n: "", t: l });
+  });
+  return out;
+}
+function renderTexto() {
+  const box = $("textoBox"); box.textContent = "";
+  const add = (cls, t) => { const e = document.createElement("div"); e.className = cls; e.textContent = t; box.appendChild(e); return e; };
+  if (state.textoP) return add("sk", "La IA está escribiendo…");
+  if (state.textoErr) return add("er", "No se pudo generar el texto (" + state.textoErr + "). Tocá ↻ para reintentar.");
+  const t = state.texto; if (!t) return;
+  add("t", t.titulo);
+  add("m", `${tipoNombre(t.tipo)} · ${AI_MODEL}${t.meta ? " · " + t.meta : ""}`);
+  if (t.tipo === "dialogo") parseDialogo(t.texto).forEach(d => {
+    const e = add("tl", ""); if (d.n) { const b = document.createElement("b"); b.textContent = d.n + ": "; e.appendChild(b); } e.appendChild(document.createTextNode(d.t));
+  });
+  else add("tp", t.texto);
 }
 
 /* ================== OBRAS DE MUSEOS ================== */
@@ -584,6 +666,59 @@ function drawGen(doc, g, top, bottom) {
   doc.text(`Obra única n.º ${g.id.slice(0, 16)} · semilla aleatoria de 128 bits`, 105, Math.min(y, bottom), { align: "center" });
   doc.setTextColor(0);
 }
+
+// Texto escrito por la IA: poesía (centrada), prosa o diálogo en cuadros. Si no entra, sigue en otra hoja (ctx.nextPage).
+function drawTexto(doc, t, top, bottom, ctx) {
+  const x0 = 22, W = 166, tipo = t.tipo;
+  let y = top + 4, bot = bottom;
+  const room = h => { if (y + h > bot) { const p = ctx.nextPage(); y = p.top; bot = p.bottom; } };
+
+  doc.setTextColor(0); doc.setFont("courier", "bold"); doc.setFontSize(13);
+  doc.splitTextToSize(safe(t.titulo).toUpperCase(), 170).slice(0, 2).forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 6; });
+  doc.setFont("courier", "normal"); doc.setFontSize(7.5);
+  doc.text(one(doc, safe(`${tipoNombre(tipo)} · ${AI_MODEL}${t.meta ? " · " + t.meta : ""}`).toUpperCase(), 180), 105, y, { align: "center" }); y += 8;
+
+  const lines = safe(t.texto).split("\n").map(l => l.replace(/\s+$/, ""));
+
+  if (tipo === "dialogo") {
+    doc.setFontSize(9.5);
+    parseDialogo(safe(t.texto)).forEach(d => {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
+      const wl = doc.splitTextToSize(d.t, W - 4), h = (d.n ? 5.4 : 1.5) + wl.length * 4.4 + 2.6;
+      room(h + 2.5);
+      doc.setFillColor(242, 242, 242); doc.roundedRect(x0 - 3, y, W + 6, h, 1.6, 1.6, "F");
+      let yy = y + 4.2; doc.setTextColor(0);
+      if (d.n) { doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.text(d.n.toUpperCase(), x0, yy); yy += 5; }
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9.5);
+      wl.forEach(l => { doc.text(l, x0 + 2, yy); yy += 4.4; });
+      y += h + 2.5;
+    });
+  } else if (["haiku", "poema", "soneto", "limerick"].includes(tipo)) {
+    const fs = { haiku: 17, limerick: 13, soneto: 11.5, poema: 11.5 }[tipo], lh = fs * .53, centered = tipo === "haiku" || tipo === "limerick";
+    doc.setFont("times", "italic"); doc.setFontSize(fs);
+    const wrapped = lines.flatMap(l => l ? doc.splitTextToSize(l, 178) : [""]);
+    const bw = Math.max(...wrapped.map(l => doc.getTextWidth(l))), bx = Math.max(15, (210 - bw) / 2);
+    wrapped.forEach(l => {
+      if (!l) { y += lh * .6; return; }
+      room(lh); doc.setFont("times", "italic"); doc.setFontSize(fs); doc.setTextColor(0);
+      if (centered) doc.text(l, 105, y, { align: "center" }); else doc.text(l, bx, y);
+      y += lh;
+    });
+  } else {
+    // prosa: microrrelato, fábula, aforismos
+    const gap = tipo === "aforismos" ? 4 : 2.2;
+    doc.setFont("times", "normal"); doc.setFontSize(11.5);
+    lines.filter(Boolean).forEach(par => {
+      doc.setFont("times", "normal"); doc.setFontSize(11.5);
+      doc.splitTextToSize(par, W).forEach(l => { room(5.2); doc.setFont("times", "normal"); doc.setFontSize(11.5); doc.setTextColor(0); doc.text(l, x0, y); y += 5.2; });
+      y += gap;
+    });
+  }
+  y += 3; room(4);
+  doc.setTextColor(110); doc.setFont("courier", "normal"); doc.setFontSize(6.5);
+  doc.text(`Texto generado por IA (${AI_MODEL})`, 105, y, { align: "center" });
+  doc.setTextColor(0);
+}
 // ==PDF-END==
 
 /* ================== GENERAR PDF ================== */
@@ -597,6 +732,7 @@ async function generatePDF() {
     let content = null, warn = "";
     try {
       if (state.mode === "gen") { setBusy(true, "Esperando a la IA…"); content = { gen: await loadObra() }; }
+      else if (state.mode === "texto") { setBusy(true, "Esperando a la IA…"); content = { txt: await loadTexto() }; }
       else if (state.mode === "azar") { setBusy(true, "Buscando una obra…"); content = { art: await getRandomArt() }; }
       else if (state.mode === "propia") content = { art: await getOwnArt() };
       if (content && content.art) {
@@ -616,12 +752,13 @@ async function generatePDF() {
     const genStr = `Generado: ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
     drawHeader(doc, com.nombre, dateStr);
-    const compact = !!(content && content.gen);
+    const compact = !!(content && (content.gen || (content.txt && content.txt.texto.length > 450)));
     if (compact) drawAttendanceQRCompact(doc, com.url, genStr); else drawAttendanceQR(doc, com.url, genStr);
 
     const top = compact ? 83 : 127, bottom = com.wa ? 248 : 287;
     const nextPage = () => { doc.addPage(); drawHeader(doc, com.nombre, dateStr); return { top: 38, bottom: 285 }; };
     if (content && content.gen) drawGen(doc, content.gen, top, bottom);
+    else if (content && content.txt) drawTexto(doc, content.txt, top, bottom, { nextPage });
     else if (content && content.art) drawArt(doc, content.art, top, bottom);
 
     if (com.wa) { doc.setPage(1); drawWA(doc, com.wa, com.nombre); }
@@ -637,6 +774,7 @@ async function generatePDF() {
     doc.save(`Asistencia_${clean}_${dateStr.replace(/\//g, "-")}.pdf`);
 
     if (content && content.gen) { state.obra = null; loadObra().catch(() => {}); } // deja listo el siguiente
+    if (content && content.txt) { state.texto = null; loadTexto().catch(() => {}); }
     setMsg(warn || "Listo ✓", !!warn);
   } catch (e) {
     console.error(e);
