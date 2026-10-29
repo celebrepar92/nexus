@@ -481,7 +481,8 @@ async function crearTexto(tipo, tema, img) {
   if (!r.ok) throw new Error("la IA respondió " + r.status);
   const t = await r.json();
   if (!t || !t.texto) throw new Error("respuesta vacía");
-  const out = { key: tipo + "|" + tema + "|" + (img ? 1 : 0), tipo: t.tipo || tipo, titulo: String(t.titulo || "").slice(0, 90), meta: String(t.meta || "").slice(0, 120), texto: String(t.texto).slice(0, 4000) };
+  const out = { key: tipo + "|" + tema + "|" + (img ? 1 : 0), tipo: t.tipo || tipo, titulo: String(t.titulo || "").slice(0, 90), meta: String(t.meta || "").slice(0, 120), texto: String(t.texto).slice(0, 4000),
+    elenco: Array.isArray(t.elenco) ? t.elenco.slice(0, 3).map(e => ({ n: String(e.n || "").slice(0, 40), d: String(e.d || "").slice(0, 130) })) : null };
   // La pintura se hace con el plan que la IA eligió según el ánimo del texto (si falta, normPlan lo completa).
   if (img) { await new Promise(res => setTimeout(res, 0)); out.img = pintar(normPlan(t.plan)); }
   return out;
@@ -519,6 +520,11 @@ function renderTexto() {
   if (t.img) { const im = new Image(); im.src = t.img.data; box.appendChild(im); }
   add("t", t.titulo);
   add("m", `${tipoNombre(t.tipo)} · ${AI_MODEL}${t.meta ? " · " + t.meta : ""}`);
+  if (t.elenco && t.elenco.length) {
+    add("m", "Participan");
+    t.elenco.forEach(e => { const l = add("tl", ""); const b = document.createElement("b"); b.textContent = e.n; l.appendChild(b); l.appendChild(document.createTextNode(" — " + e.d)); });
+    add("m", " ");
+  }
   if (t.tipo === "dialogo") parseDialogo(t.texto).forEach(d => {
     const e = add("tl", ""); if (d.n) { const b = document.createElement("b"); b.textContent = d.n + ": "; e.appendChild(b); } e.appendChild(document.createTextNode(d.t));
   });
@@ -806,6 +812,25 @@ function drawTexto(doc, t, top, bottom, ctx) {
   doc.splitTextToSize(safe(t.titulo).toUpperCase(), 170).slice(0, 2).forEach(l => { doc.text(l, 105, y, { align: "center" }); y += 6; });
   doc.setFont("courier", "normal"); doc.setFontSize(7.5);
   doc.text(one(doc, safe(`${tipoNombre(tipo)} · ${AI_MODEL}${t.meta ? " · " + t.meta : ""}`).toUpperCase(), 180), 105, y, { align: "center" }); y += 8;
+
+  // Presentación de los participantes (quiénes son), antes del diálogo
+  if (t.elenco && t.elenco.length) {
+    doc.setFontSize(7.8);
+    const items = t.elenco.map(e => {
+      doc.setFont("helvetica", "bold"); const nm = safe(e.n).toUpperCase(), nw = doc.getTextWidth(nm + "  ");
+      doc.setFont("helvetica", "normal"); return { nm, nw, dl: doc.splitTextToSize(safe(e.d), W - 6 - nw).slice(0, 2) };
+    });
+    const h = 6.2 + items.reduce((a, it) => a + it.dl.length * 3.9 + .8, 0) + 1.2;
+    room(h + 4);
+    doc.setDrawColor(150); doc.setLineWidth(.2); doc.roundedRect(x0 - 3, y, W + 6, h, 1.6, 1.6); doc.setDrawColor(0);
+    let yy = y + 4.4; doc.setTextColor(60); doc.setFont("courier", "bold"); doc.setFontSize(7); doc.text("PARTICIPAN", x0, yy); yy += 4;
+    doc.setTextColor(0);
+    items.forEach(it => {
+      doc.setFont("helvetica", "bold"); doc.setFontSize(7.8); doc.text(it.nm, x0, yy);
+      doc.setFont("helvetica", "normal"); it.dl.forEach(l => { doc.text(l, x0 + it.nw, yy); yy += 3.9; }); yy += .8;
+    });
+    y += h + 4;
+  }
 
   const lines = safe(t.texto).split("\n").map(l => l.replace(/\s+$/, ""));
 
